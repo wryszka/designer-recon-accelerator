@@ -1,0 +1,108 @@
+bundle:
+  name: designer-recon-accelerator
+
+# One SHARED folder so the same path opens for everyone; notebooks land directly under it,
+# bundle state in a hidden .bundle/ beside them.
+workspace:
+  root_path: /Workspace/Shared/${bundle.name}/.bundle
+  file_path: /Workspace/Shared/${bundle.name}
+
+permissions:
+  - level: CAN_MANAGE
+    group_name: users
+
+variables:
+  catalog_name:
+    description: Unity Catalog name for all accelerator tables
+    default: lr_dev_aws_us_catalog
+  schema_name:
+    description: Schema shared by every use case
+    default: designer_recon_demo
+  landing_volume_name:
+    description: UC Volume for UC3 file-landing / fixed-width source files
+    default: recon_landing
+  warehouse_id:
+    description: SQL warehouse for ad-hoc queries
+    default: "a3b61648ea4809e3"
+
+targets:
+  default:
+    default: true
+    workspace:
+      host: https://fevm-lr-serverless-aws-us.cloud.databricks.com
+      profile: DEFAULT
+  dev:
+    workspace:
+      host: https://fevm-lr-dev-aws-us.cloud.databricks.com
+      profile: DEV
+    variables:
+      catalog_name: lr_dev_aws_us_catalog
+      warehouse_id: "a3b61648ea4809e3"
+
+resources:
+  jobs:
+    generate_cash_matching:
+      name: "[recon-accel] generate cash-matching sources"
+      tasks:
+        - task_key: generate
+          notebook_task:
+            notebook_path: ./demo_01_cash_matching/01_generate_sources.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+    generate_control_sheet:
+      name: "[recon-accel] generate control-sheet sources"
+      tasks:
+        - task_key: generate
+          notebook_task:
+            notebook_path: ./demo_02_control_sheet/01_generate_sources.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+    automation_file_staging:
+      name: "[recon-accel] UC3 file staging (Autoloader)"
+      tasks:
+        - task_key: file_staging
+          notebook_task:
+            notebook_path: ./demo_03_automation/01_file_staging.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+    automation_bdx_parser:
+      name: "[recon-accel] UC3 fixed-width parser + contra"
+      tasks:
+        - task_key: bdx_parser
+          notebook_task:
+            notebook_path: ./demo_03_automation/02_fixedwidth_parser.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+sync:
+  exclude:
+    - "*.bak"
