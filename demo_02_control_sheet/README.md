@@ -1,9 +1,10 @@
 # Use Case 2 — Control sheet: branches that tie back to the whole
 
-The classic control: split a payments dataset into branches (by company, category and bank),
-total each on a control sheet, and prove every branch ties back to the main dataset with
-**zero variance**. Today it's a desktop-ETL canvas of filters and summaries; here it's a
-Lakeflow Designer flow with a governed table out and the reconciliation built in.
+The classic control: join a category lookup onto a payments dataset, split it into **six or
+seven separate tables** by combinations of category and other fields, then a **summary control
+sheet that sums the total of each** — and prove the parts tie back to the whole with **zero
+variance**. Today it's a desktop-ETL canvas of filters and summaries; here it's a Lakeflow
+Designer flow with a governed table out and the reconciliation built in.
 
 ## What you'll build
 `cs_control_sheet`: per-branch totals plus the main total, with a variance that must be

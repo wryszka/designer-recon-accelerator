@@ -12,21 +12,24 @@ where it says, and the demo works.
 ---
 
 ## 1. What this is
-Three reconciliation / automation workflows that finance & audit teams run today in a desktop
-ETL tool plus Python, rebuilt on Databricks:
+Three finance / audit workflows that teams run today in a desktop ETL tool plus Python, rebuilt
+on Databricks. The thread that ties them together: the hard part is the **file interface** —
+files landing in folders and formatted outputs going back out — not the logic in between.
 
-- **UC1 — Cash matching:** reconcile 40+ bank accounts (ledger vs bank + timing items); each
-  nets to zero, exceptions flagged. **Lakeflow Designer.**
-- **UC2 — Control sheet:** split payments into branches; every branch ties back to the main
-  total with **0.00 variance**. **Lakeflow Designer.**
-- **UC3 — Scheduled automation:** file staging + fixed-width parsing/contra — **Lakeflow Jobs
-  + Autoloader + Unity Catalog audit** (not Designer, and that's the honest answer to "can the
-  platform schedule + log like our scripts?").
+- **UC1 — Cash-flow rec:** each month, read a few header cells from ~20 bank-rec workbooks and
+  **append two new columns** (Current + Control) onto a rolling cash-flow file; missing workbooks
+  fall back to two cells; **formatted Excel** out. **Lakeflow Designer.**
+- **UC2 — Control sheet:** split payments into ~6–7 category tables; a summary control sheet sums
+  them and ties back to the whole with **0.00 variance**. **Lakeflow Designer.**
+- **UC3 — Scheduled automation:** 3a pick the right file version by name + copy + log; 3b parse
+  ~30 fixed-width files, contra-check each against its contra row, consolidate + log. **Lakeflow
+  Jobs + Autoloader + Unity Catalog audit** (not Designer — the honest answer to "can the platform
+  schedule + log like our scripts?").
 
-**The story:** *UC1 and UC2 are the desktop-ETL work — join, clean, aggregate, reconcile —
-done visually on a governed platform and reconciled to the penny. UC3 is the scheduling and
-audit trail the desktop tool can't give you. And on the Designer flows you never have to read
-the SQL, nor trust it blindly — you tie it out.*
+**The story:** *UC1 and UC2 are the desktop-ETL work — lookup, aggregate, reconcile — done
+visually on a governed platform and reconciled to the penny. UC3 is the scheduling, autonomous
+runs and audit trail the desktop tool can't give you. And on the Designer flows you never have to
+read the SQL, nor trust it blindly — you tie it out.*
 
 ---
 
@@ -43,7 +46,7 @@ Pre-built on the **DEV workspace**: `https://fevm-lr-dev-aws-us.cloud.databricks
 |---|---|
 | All notebooks | Workspace → `/Workspace/Shared/designer-recon-accelerator/` |
 | Catalog + schema (all tables) | `lr_dev_aws_us_catalog` → `designer_recon_demo` |
-| Landing volume (UC3 files) | Volume `recon_landing` |
+| Landing volume (UC1 workbooks + UC3 files) | Volume `recon_landing` |
 | Jobs | Workflows → jobs prefixed `[recon-accel]` |
 | Public repo | `https://github.com/wryszka/designer-recon-accelerator` |
 
@@ -51,27 +54,33 @@ Pre-built on the **DEV workspace**: `https://fevm-lr-dev-aws-us.cloud.databricks
 
 | Table | Use case | What it holds |
 |---|---|---|
-| `cm_accounts`, `cm_gl_balances`, `cm_bank_balances`, `cm_prior_recon` | UC1 | sources |
-| `cm_benchmark` | UC1 | coded reconciliation (parity oracle) |
-| `cm_reconciliation` | UC1 | the table you build on the Designer canvas |
+| `cf_accounts`, `cf_prior_rec`, `cf_period_extract` | UC1 | account ref · rolling baseline · this period parsed from files |
+| `cf_benchmark` | UC1 | expected output (parity oracle) |
+| `cf_cashflow_rec` | UC1 | the produced rolling rec (prior + the two new columns) |
 | `cs_payments`, `cs_category_lookup` | UC2 | sources |
 | `cs_benchmark` | UC2 | coded control sheet (parity oracle) |
 | `cs_control_sheet` | UC2 | the table you build on the Designer canvas |
-| `af_files_bronze`, `af_files_staged`, `af_staging_audit` | UC3 | file-staging + audit log |
-| `fw_bdx_consolidated` | UC3 | parsed fixed-width payments + contra-adjusted amounts |
+| `af_files_bronze`, `af_files_staged`, `af_staging_audit` | UC3a | files seen · selected version · run log |
+| `fw_bdx_consolidated`, `fw_contra_log` | UC3b | consolidated detail rows · per-file contra check |
+
+**UC1 Volume files** — `recon_landing/uc1/`: `bank_recs/` (workbooks), `sap_fallback/` +
+`bank_fallback/` (missing-workbook fallback), `prior/` (last month's rolling file),
+`output/CashFlowRec_<period>.xlsx` (the formatted output).
 
 ---
 
 ## 3. Prerequisites
 - DEV workspace access with `lr_dev_aws_us_catalog` visible; a serverless **SQL warehouse**.
 - **Lakeflow Designer (GA)** — confirm via **+ New → Data prep**. Needed for UC1 & UC2's live build.
+- **Excel file-format support** enabled (default-on since Jul 2026) if you want to drag a raw
+  `.xlsx` onto the canvas — worth a 2-minute check in the target workspace.
 - To (re)deploy elsewhere: the **Databricks CLI**, authenticated.
 
 ---
 
 ## 4. Pre-flight — the day before
-1. **Confirm the data.** Catalog → `designer_recon_demo` → check `cm_benchmark` and
-   `cs_benchmark` exist. If the schema is empty, run the generators — §5.
+1. **Confirm the data.** Catalog → `designer_recon_demo` → check `cf_benchmark`, `cs_benchmark`
+   and `fw_contra_log` exist. If the schema is empty, run the generators — §5.
 2. **Open the surfaces once** so first load is instant: a blank **Data prep** canvas.
 3. **Dry-run both Designer builds once** (UC1 §6, UC2 §6) — the canvas is live clicks, no "Run all".
 
@@ -83,10 +92,11 @@ On DEV (rebuild in place), CLI authenticated to profile `DEV`:
 git clone https://github.com/wryszka/designer-recon-accelerator.git
 cd designer-recon-accelerator
 databricks bundle deploy -t dev -p DEV
-databricks bundle run generate_cash_matching  -t dev -p DEV   # cm_* tables
-databricks bundle run generate_control_sheet   -t dev -p DEV   # cs_* tables
-databricks bundle run automation_file_staging  -t dev -p DEV   # af_* tables (UC3a)
-databricks bundle run automation_bdx_parser     -t dev -p DEV   # fw_* table  (UC3b)
+databricks bundle run generate_cashflow_rec     -t dev -p DEV   # cf_* tables + UC1 Volume files
+databricks bundle run uc1_parse_append_parity   -t dev -p DEV   # parse → append → parity → Excel
+databricks bundle run generate_control_sheet    -t dev -p DEV   # cs_* tables
+databricks bundle run automation_file_staging   -t dev -p DEV   # af_* tables (UC3a)
+databricks bundle run automation_bdx_parser     -t dev -p DEV   # fw_* tables (UC3b)
 ```
 **Different workspace / sandbox:** edit `databricks.yml` targets + `catalog_name`/`schema_name`;
 every notebook also has those widgets at the top. Nothing else changes.
@@ -95,32 +105,33 @@ every notebook also has those widgets at the top. Nothing else changes.
 
 ## 6. Chapter-by-chapter — the verbose steps
 
-### UC1 · Cash matching — Lakeflow Designer
-Full click-through: **Workspace → Shared → designer-recon-accelerator → demo_01_cash_matching →
+### UC1 · Cash-flow rec — Lakeflow Designer
+Full click-through: **Workspace → Shared → designer-recon-accelerator → demo_01_cashflow_rec →
 `README.md`**. Summary:
-1. **+ New → Data prep** → blank canvas.
-2. **Add source** → `cm_gl_balances`, `cm_bank_balances` (and `cm_accounts` for names). If the
-   picker is empty, point its catalog/schema at **lr_dev_aws_us_catalog / designer_recon_demo**.
-3. **Join** `cm_gl_balances` + `cm_bank_balances`, inner join on `account_code` — name **match gl to bank**.
-4. **SQL** operator computing `variance` and a `Reconciled`/`Exception` `status` (exact SQL in
-   the folder README) — name **reconcile**.
-5. **Output** → table `cm_reconciliation` → **Run**. Preview: most `variance` ≈ 0; a few `Exception`.
-6. **One-prompt alternative:** paste the prompt in the folder README's *"build it with ONE AI
-   prompt"* section into the canvas **✨ Generate** box — Designer builds the whole flow.
-7. **Prove it:** open **demo_01_cash_matching → `02_parity.py`**, **Connect** to serverless,
-   **Run all** → **✅ PARITY** (all accounts match the coded reconciliation, incl. the 3 exceptions).
-8. **See & amend code / govern / co-edit:** **</> Code** toggle (hand to an engineer — edits
-   reflect back to the canvas); Catalog Explorer → `cm_reconciliation` → **Lineage**;
-   **Schedule**; **Share** as **Can Edit** to co-own the flow.
+1. Run `generate_cashflow_rec` once → lands the workbooks + rolling file in the Volume and builds
+   the tables. (In the room you can **drag a bank-rec `.xlsx` onto a Designer canvas** to show it
+   ingesting Excel directly.)
+2. **+ New → Data prep** → blank canvas.
+3. **Add source** → `cf_prior_rec` (rolling file) and `cf_period_extract` (this period parsed).
+4. **Join** on `account_code` (left) — name **append this period**.
+5. **SQL / select** → rename `current_period` → `Jul_Current`, `period_control` → `Jul_Control`,
+   keep the prior columns. You're adding two *named* columns — no positional maths.
+6. **Output** → table `cf_cashflow_rec_designer` → **Run**.
+7. **One-prompt alternative:** the **✨ Generate** prompt in the folder README.
+8. **Prove it:** open **demo_01_cashflow_rec → `02_parse_append_parity.py`**, **Run all** →
+   **✅ PARITY to the penny** vs `cf_benchmark`, and the **formatted Excel** lands in
+   `recon_landing/uc1/output/`.
+9. **See & amend code / govern / co-edit:** **</> Code** toggle; Catalog Explorer →
+   `cf_cashflow_rec` → **Lineage**; **Schedule**; **Share** as **Can Edit**.
 
 ### UC2 · Control sheet — Lakeflow Designer
 Full click-through: **demo_02_control_sheet → `README.md`**. Summary:
 1. **+ New → Data prep** → blank canvas.
 2. **Add source** → `cs_payments`, `cs_category_lookup`.
 3. **Join** on `supplier` — name **lookup category** (the VLOOKUP).
-4. **SQL** operator to derive the `branch` key; **Aggregate** group by `branch` sum
-   `amount_paid` → `branch_total`; **SQL** to add the `MAIN (all payments)` total + `variance`
-   (exact SQL in the folder README).
+4. **SQL** to derive the branch key; **Aggregate** group by `branch` sum `amount_paid` →
+   `branch_total`; **SQL** to add the `MAIN (all payments)` total + `variance` (exact SQL in the
+   folder README). These are the ~6–7 category tables and the summary that sums them.
 5. **Output** → table `cs_control_sheet` → **Run**.
 6. **One-prompt alternative** and the code/govern/co-edit beats — folder README.
 7. **Prove it:** **demo_02_control_sheet → `02_parity.py`**, **Run all** → **✅ PARITY**: branches
@@ -128,23 +139,28 @@ Full click-through: **demo_02_control_sheet → `README.md`**. Summary:
 
 ### UC3 · Scheduled automation — Jobs + Autoloader + audit
 Full detail: **demo_03_automation → `README.md`**.
-1. **File staging:** open **demo_03_automation → `01_file_staging.py`**, **Connect** to
-   serverless, **Run all** (or job `automation_file_staging`). Lands versioned files in Volume
-   `recon_landing → reports_incoming/`, Autoloader → `af_files_bronze`, stages the **earliest**
-   per code → `af_files_staged`, appends to `af_staging_audit`. Then **Schedule** it (Workflows).
-2. **Fixed-width parser:** open **`02_fixedwidth_parser.py`**, **Run all** (or job
-   `automation_bdx_parser`). Writes a synthetic fixed-width file, parses by position, negates
-   contra rows → `fw_bdx_consolidated`; show `gross_total` vs contra-adjusted `reconciled_total`.
-3. **The point:** show the **Job run history** + `af_staging_audit` + Catalog **Lineage** — the
-   scheduled, autonomous, audited automation the desktop tool can't give.
+1. **File staging (3a):** open **`01_file_staging.py`**, **Run all** (or job
+   `automation_file_staging`). Lands versioned files in two folders under `recon_landing/uc3a/`,
+   Autoloader → `af_files_bronze`, selects the **highest version per folder + report code by
+   name** → `af_files_staged`, **copies** them to `uc3a/destination/`, appends to
+   `af_staging_audit`. Then **Schedule** it.
+2. **Fixed-width parser (3b):** open **`02_fixedwidth_parser.py`**, **Run all** (or job
+   `automation_bdx_parser`). Writes ~30 daily fixed-width files (two seeded to *not* tie), parses
+   by position, consolidates → `fw_bdx_consolidated`, runs the **per-file contra check** →
+   `fw_contra_log`, writes the consolidated CSV + a `run_summary_*.txt`.
+3. **The point:** show the **Job run history** + the run-log tables + Catalog **Lineage** — the
+   scheduled, autonomous, audited automation the desktop tool can't give, with files that flow
+   the moment they land.
 
 ---
 
 ## 7. The lines to land
 1. *You never write or read code on UC1/UC2 — and every figure is reconciled to the penny, so
    you never take the AI on faith either.*
-2. *Designer does the visual reconciliation (UC1, UC2). The scheduling, autonomous runs and
-   audit trail (UC3) come from the platform — the part a desktop ETL tool can't do.*
+2. *The positional hack that made the cash-flow rec "disgusting" simply doesn't exist here — you
+   append two named columns, and the formatted Excel comes out automatically.*
+3. *Designer does the visual reconciliation (UC1, UC2). The scheduling, autonomous runs and audit
+   trail (UC3) come from the platform — and no one moves a file by hand.*
 
 ---
 
@@ -152,13 +168,15 @@ Full detail: **demo_03_automation → `README.md`**.
 | Symptom | Fix |
 |---|---|
 | Designer picker shows no tables | Point its catalog/schema at **lr_dev_aws_us_catalog / designer_recon_demo**. |
-| `02_parity` says "canvas output pending" | Build the canvas first; set its Output to `cm_reconciliation` (UC1) / `cs_control_sheet` (UC2). |
-| Tables missing | Run the four `[recon-accel]` generator/automation jobs — §5. |
+| Can't drag an `.xlsx` onto the canvas | Enable Excel file-format support in workspace settings (default-on since Jul 2026). |
+| `02_parity` says "canvas output pending" | Build the canvas first; set its Output table (UC2 `cs_control_sheet`). |
+| `DELTA_METADATA_MISMATCH` on an audit/log table | A stale table from an earlier schema — `DROP TABLE` it once; the notebooks recreate it. |
+| Tables missing | Run the `[recon-accel]` generator/automation jobs — §5. |
 | A notebook can't find Data prep | Lakeflow Designer isn't enabled in that workspace; UC1/UC2 live build needs it (UC3 still runs). |
 
 ---
 
 ## 9. Running in a customer sandbox
-`git clone`, edit `databricks.yml` targets, `databricks bundle deploy`, run the four jobs, set
-each notebook's `catalog_name` / `schema_name` widgets. All data is synthetic and generated
-in-place — nothing customer-specific ever leaves.
+`git clone`, edit `databricks.yml` targets, `databricks bundle deploy`, run the jobs, set each
+notebook's `catalog_name` / `schema_name` widgets. All data is synthetic and generated in-place —
+nothing customer-specific ever leaves.

@@ -1,99 +1,140 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # UC3b · Fixed-width payment file → parse + contra reconciliation
+# MAGIC # UC3b · Fixed-width BDX files → parse, per-file contra check, consolidate, log
 # MAGIC
-# MAGIC The second automation: a **fixed-width** payment export (not delimited) is parsed by
-# MAGIC column position, contra entries are reconciled, and a consolidated, validated output is
-# MAGIC produced. Another Python-shaped job (not a Designer transform) that runs on a schedule
-# MAGIC with a full audit trail — the platform answer to "can it do what our script does?".
+# MAGIC The Avantia BDX job. Each day a **fixed-width** file lands in a folder. At the start of the
+# MAGIC month you run through **all of last month's files** (~30), and for each one:
+# MAGIC 1. **parse by position** (it's fixed-width, not delimited — you can't just text-to-columns),
+# MAGIC 2. tag every row with the **file it came from**,
+# MAGIC 3. run the **contra check**: the detail rows must **sum to the file's contra row**
+# MAGIC    (e.g. 10 + 20 + 30 = 60),
+# MAGIC 4. **consolidate** all files into one output, and
+# MAGIC 5. emit a **run log / summary** — which files ran and whether each tied to its contra.
 # MAGIC
-# MAGIC Everything synthetic, prefixed `fw_`. No real bank, payer or payee.
+# MAGIC A Python-shaped **Lakeflow Job** (not a Designer transform): runs monthly, unattended, with a
+# MAGIC full audit trail. Everything synthetic, prefixed `fw_`.
 
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_dev_aws_us_catalog")
 dbutils.widgets.text("schema_name", "designer_recon_demo")
 dbutils.widgets.text("landing_volume_name", "recon_landing")
+dbutils.widgets.text("period", "2026-06")     # the month whose daily files we process
 dbutils.widgets.text("seed", "73")
 catalog = dbutils.widgets.get("catalog_name")
 schema = dbutils.widgets.get("schema_name")
 volume = dbutils.widgets.get("landing_volume_name")
+period = dbutils.widgets.get("period")
 seed = int(dbutils.widgets.get("seed"))
 fqn = f"{catalog}.{schema}"
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn}")
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {fqn}.{volume}")
-src_path = f"/Volumes/{catalog}/{schema}/{volume}/payments_fixedwidth.txt"
+
+vroot = f"/Volumes/{catalog}/{schema}/{volume}/uc3b"
+incoming = f"{vroot}/incoming"
+output = f"{vroot}/output"
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Generate a synthetic fixed-width file (self-consistent layout)
-# MAGIC Layout (0-indexed slices): sort_code[0:6] account_no[6:14] trans_code[14:17]
-# MAGIC amount_pence[17:30] reference[30:48] payment_reference[48:66] payee_name[66:96].
-# MAGIC First 4 rows are a header block and are skipped; only rows starting with a digit parse.
+# MAGIC ## Generate ~30 daily fixed-width files
+# MAGIC Layout (1-indexed): `rtype[1] seq[2:6] sort_code[7:12] account[13:20] payee[21:44] amount_pence[45:60]`.
+# MAGIC Rows are `D` (detail) then one `C` (contra) whose amount equals the sum of the details.
+# MAGIC A couple of days are seeded to **not** tie — so the log has something to catch.
 
 # COMMAND ----------
 
-import numpy as np
+import calendar, numpy as np, pandas as pd
 rng = np.random.default_rng(seed)
 
-def row(sort_code, acct, tcode, pence, ref, pay_ref, payee):
-    return (f"{sort_code:<6}{acct:<8}{tcode:<3}{pence:<13}{ref:<18}{pay_ref:<18}{payee:<30}")
+dbutils.fs.rm(vroot, True)
+dbutils.fs.mkdirs(incoming)
 
-lines = ["HEADER  BATCH EXPORT (synthetic)".ljust(96),
-         "FILETYPE=PAYMENTS".ljust(96),
-         "GENERATED=2026-09-07".ljust(96),
-         "----".ljust(96)]
-total_pounds = 0.0
-for i in range(200):
-    pence = int(rng.integers(500, 500000))           # 5.00 – 5,000.00
-    is_contra = rng.random() < 0.15
-    pay_ref = "CONTRA REVERSAL" if is_contra else f"PAYREF{i:05d}"
-    lines.append(row(f"{rng.integers(100000,999999)}", f"{rng.integers(10000000,99999999)}",
-                     "099", str(pence), f"REF{i:05d}", pay_ref, f"Payee {i:04d}"))
-    total_pounds += (-(pence/100.0) if is_contra else (pence/100.0))
+yr, mo = map(int, period.split("-"))
+n_days = calendar.monthrange(yr, mo)[1]
+mismatch_days = set(int(x) for x in rng.choice(range(1, n_days + 1), size=2, replace=False))
 
-dbutils.fs.put(src_path, "\n".join(lines) + "\n", True)
-print(f"wrote {src_path} — {len(lines)} lines; expected reconciled total ≈ {round(total_pounds,2)}")
+def rec(rtype, seq, sort, acct, payee, pence):
+    return f"{rtype:<1}{seq:<5}{sort:<6}{acct:<8}{payee:<24}{str(int(pence)):<16}"
+
+for d in range(1, n_days + 1):
+    k = int(rng.integers(5, 16))
+    lines, total = [], 0
+    for i in range(k):
+        pence = int(rng.integers(1_000, 500_000))
+        total += pence
+        lines.append(rec("D", i + 1, str(rng.integers(100000, 999999)),
+                         str(rng.integers(10_000_000, 99_999_999)), f"Payee {i:04d}", pence))
+    contra = total + (int(rng.integers(50, 500)) * 100 if d in mismatch_days else 0)   # break a couple
+    lines.append(rec("C", 99999, "", "", "CONTRA TOTAL", contra))
+    dbutils.fs.put(f"{incoming}/BDX_{yr}-{mo:02d}-{d:02d}.txt", "\n".join(lines) + "\n", True)
+
+print(f"wrote {n_days} daily files for {period}; contra deliberately broken on days {sorted(mismatch_days)}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Parse by position, apply contra, consolidate + validate
+# MAGIC ## Parse by position across all files, keeping the source file name
 
 # COMMAND ----------
 
-raw = spark.read.text(src_path)
-spark.sql(f"DROP TABLE IF EXISTS {fqn}.fw_bdx_consolidated")
-
-parsed = raw.selectExpr(
-    "substring(value, 1, 6) AS sort_code",
-    "substring(value, 7, 8) AS account_no",
-    "substring(value, 15, 3) AS trans_code",
-    "try_cast(trim(substring(value, 18, 13)) AS DOUBLE) / 100.0 AS amount",
-    "trim(substring(value, 31, 18)) AS reference",
-    "trim(substring(value, 49, 18)) AS payment_reference",
-    "trim(substring(value, 67, 30)) AS payee_name",
-    "value",
-).where("substring(value,1,1) rlike '^[0-9]'")   # skip header rows
-
-# contra: negate amount where payment_reference contains CONTRA
 from pyspark.sql import functions as F
-final = parsed.withColumn(
-    "amount_adjusted",
-    F.when(F.upper("payment_reference").contains("CONTRA"), -F.col("amount")).otherwise(F.col("amount"))
-).drop("value")
 
-final.write.mode("overwrite").saveAsTable(f"{fqn}.fw_bdx_consolidated")
-spark.sql(f"COMMENT ON TABLE {fqn}.fw_bdx_consolidated IS 'Parsed fixed-width payments + contra-adjusted amounts (synthetic).'")
+raw = spark.read.text(incoming).select("value", F.col("_metadata.file_name").alias("source_file"))
+parsed = raw.selectExpr(
+    "source_file",
+    "trim(substring(value, 1, 1))                             AS record_type",
+    "trim(substring(value, 2, 5))                             AS seq",
+    "trim(substring(value, 7, 6))                             AS sort_code",
+    "trim(substring(value, 13, 8))                            AS account_no",
+    "trim(substring(value, 21, 24))                           AS payee_name",
+    "try_cast(trim(substring(value, 45, 16)) AS DOUBLE)/100.0 AS amount",
+).where("length(trim(value)) > 0")
 
-# validation: reconciled total = sum of contra-adjusted amounts
-res = spark.sql(f"""
-  SELECT count(*) rows,
-         round(sum(amount), 2)          AS gross_total,
-         round(sum(amount_adjusted), 2) AS reconciled_total,
-         sum(CASE WHEN upper(payment_reference) LIKE '%CONTRA%' THEN 1 ELSE 0 END) AS contra_rows
-  FROM {fqn}.fw_bdx_consolidated""")
-display(res)
-print("gross_total = sum of all amounts; reconciled_total nets the contra reversals — that is "
-      "the figure that must tie back to the batch control total.")
+# consolidate all files' DETAIL rows into one table
+detail = parsed.where("record_type = 'D'")
+detail.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.fw_bdx_consolidated")
+spark.sql(f"COMMENT ON TABLE {fqn}.fw_bdx_consolidated IS 'UC3b consolidated detail rows across all daily fixed-width files (synthetic).'")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Per-file contra check: detail rows must sum to the contra row
+
+# COMMAND ----------
+
+detail_agg = detail.groupBy("source_file").agg(
+    F.count("*").alias("detail_rows"), F.round(F.sum("amount"), 2).alias("detail_sum"))
+contra = parsed.where("record_type = 'C'").select(
+    "source_file", F.round("amount", 2).alias("contra_amount"))
+
+log = (detail_agg.join(contra, "source_file", "left")
+       .withColumn("difference", F.round(F.col("detail_sum") - F.col("contra_amount"), 2))
+       .withColumn("status", F.when(F.abs("difference") < 0.005, "MATCH").otherwise("MISMATCH")))
+log.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.fw_contra_log")
+spark.sql(f"COMMENT ON TABLE {fqn}.fw_contra_log IS 'UC3b per-file contra reconciliation (detail sum vs contra row). Synthetic.'")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Consolidated CSV output + a run summary (the "email at the end")
+
+# COMMAND ----------
+
+(spark.table(f"{fqn}.fw_bdx_consolidated").coalesce(1)
+    .write.mode("overwrite").option("header", True).csv(f"{output}/consolidated_{period}"))
+
+s = spark.sql(f"""SELECT count(*) files, sum(CASE WHEN status='MATCH' THEN 1 ELSE 0 END) matched,
+                         sum(CASE WHEN status='MISMATCH' THEN 1 ELSE 0 END) mismatched
+                  FROM {fqn}.fw_contra_log""").first()
+bad = spark.sql(f"SELECT source_file, difference FROM {fqn}.fw_contra_log WHERE status='MISMATCH' ORDER BY source_file").collect()
+summary = (f"BDX consolidation — {period}\n"
+           f"files processed : {s['files']}\n"
+           f"contra matched  : {s['matched']}\n"
+           f"contra mismatch : {s['mismatched']}\n"
+           + ("".join(f"  ! {r['source_file']}  diff {r['difference']:.2f}\n" for r in bad)
+              if bad else "  all files tied to their contra row\n"))
+dbutils.fs.put(f"{output}/run_summary_{period}.txt", summary, True)
+print(summary)
+print(f"consolidated CSV → {output}/consolidated_{period}/   ·   summary → {output}/run_summary_{period}.txt")
+display(spark.sql(f"SELECT * FROM {fqn}.fw_contra_log ORDER BY status DESC, source_file"))

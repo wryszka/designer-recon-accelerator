@@ -41,15 +41,32 @@ targets:
 
 resources:
   jobs:
-    generate_cash_matching:
-      name: "[recon-accel] generate cash-matching sources"
+    generate_cashflow_rec:
+      name: "[recon-accel] UC1 generate cash-flow rec sources"
       tasks:
         - task_key: generate
           notebook_task:
-            notebook_path: ./demo_01_cash_matching/01_generate_sources.py
+            notebook_path: ./demo_01_cashflow_rec/01_generate_sources.py
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+    uc1_parse_append_parity:
+      name: "[recon-accel] UC1 parse → append → parity → formatted Excel"
+      tasks:
+        - task_key: parse_parity
+          notebook_task:
+            notebook_path: ./demo_01_cashflow_rec/02_parse_append_parity.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
           environment_key: serverless
       environments:
         - environment_key: serverless
