@@ -41,48 +41,63 @@ ugly five-input Alteryx build (the tool can't hold a variable for the moving col
 co-own it · scheduled + audited · handles the missing workbook · **each account nets to zero** with
 exceptions flagged · formatted Excel out.
 
-### ② The story you tell while building (keep Autoloader quiet)
+### ② The story you tell while building
 *"You drop your rolling cash-flow file — the one you carry forward. This month's account numbers are
-already waiting as a table. We join them, reconcile, and hand you back a formatted Excel. No code,
-nothing re-keyed."* Keep it familiar — **you drop a file**, like today. (Where this month's numbers came
-from is ⑤ — mention only if asked; don't lead with "we automated your folders.")
+already here as a table, and you can see exactly which workbook each figure came from. We join them,
+reconcile, and hand you back a formatted Excel. No code, nothing re-keyed."* Keep it familiar — **you
+drop a file**, like today — and lean on **provenance** (⑤) so nothing feels like a black box.
 
-### ③ Build the flow — visual, no code (7 boxes, so it reads as real work)
-**Fastest — recreate it with one plain-English prompt** (uses the tables). On a blank **+ New → Data
-prep** canvas, paste into **✨ Generate**:
-> *Join cf_prior_rec to cf_period_extract on account_code, keeping all rows from cf_prior_rec. Add a
-> column Jul_Status = Reconciled when period_control is 0, otherwise Exception. Add Jul_Current from
-> current_period and Jul_Control from period_control. Sort so Exception rows are on top. Write to
-> cf_cashflow_rec_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
-
-**Or build it by hand — every step visual, no SQL:**
+### ③ Build the flow — no code, all visual UI operators (7 boxes)
+Designer's operators do every step with **no SQL**: rename via the **Select** operator, derive via
+**Prepare → Formula** (you type a plain-English *description* in the Formula box — it is **not** a SQL box).
 1. **Source ① — drop the Excel:** drag **`rolling/CashFlowRec_2026-06.xlsx`** onto the canvas (the ONE
-   file). It becomes the rolling source. *(csv version is right beside it if you'd rather drop csv.)*
+   file). *(csv sits beside it if you'd rather drop csv.)*
 2. **Source ② — add the table `cf_period_extract`** (this month's numbers).
-3. **Join** — key `account_code`, type **Left** (keep every account). *(clicks)*
-4. **Reconciliation status** — add a **`Jul_Status`** column: *Reconciled* when Control = 0, else
-   *Exception*. ⚠️ expression step → paste into **✨ Generate**:
-   > *Add a column Jul_Status = Reconciled when period_control is 0, otherwise Exception.*
-5. **Rename** the two new values to **`Jul_Current`** / **`Jul_Control`**. ⚠️ expression → paste:
-   > *Rename current_period to Jul_Current and period_control to Jul_Control; drop the source column.*
-6. **Sort** — Exception rows to the top (so the breaks are obvious). *(clicks)*
+3. **Join** — key `account_code`, type **Left** (keep every account).
+4. **Prepare → Formula** — add **`Jul_Status`**: type the description *"Reconciled when period_control is
+   0, otherwise Exception"* and Designer writes the expression. No SQL box.
+5. **Select** — rename `current_period` → **`Jul_Current`**, `period_control` → **`Jul_Control`**; untick
+   `source` / `source_file`. (The Select operator has a rename field per column — pure clicks.)
+6. **Sort** — Exception rows to the top.
 7. **Output → `cf_cashflow_rec_designer`** → **Run.**
 
-Seven visible boxes, **zero SQL on screen**; the only expression steps (4 and 5) are done with the
-plain-English prompts above.
+All seven are **UI operators — no SQL typed, no code written.** *(Faster still: one **✨ Generate** prompt
+builds the whole flow — the recreate prompt is in the Fallbacks section.)*
 
 ### ④ Prove it + Excel out
-- Run **`02_parse_append_parity.py`** → **✅ PARITY to the penny** vs `cf_benchmark`, and it writes the
-  **formatted Excel** to `output/CashFlowRec_2026-07.xlsx` (+ `.csv`). **5 of 6 accounts reconciled, 1
-  exception (ACC-003)** — the exception shows in red.
-- *"Each account nets to zero on the Control column; the one that doesn't is flagged."* **That is the reconciliation.**
-- **Trust beat (optional):** toggle **</> Code** to show the generated SQL *exists* for a technical
-  colleague to review — the business user never writes it. **Lineage / Schedule / Share → Can Edit.**
+- Run **`02_parse_append_parity.py`** → **✅ PARITY to the penny** vs `cf_benchmark`; it writes the
+  **formatted Excel** to `output/CashFlowRec_2026-07.xlsx` (+ `.csv`). **5 of 6 reconciled, 1 exception
+  (ACC-003)** — shown in red.
+- *"Each account's Control nets to zero — that's the reconciliation; the one that doesn't is flagged."*
 
-### ⑤ Only if they ask — where did this month's numbers come from?
-*"Your account workbooks land in a folder like they do today; the platform quietly read them into that
-table — you didn't open the workbooks or re-key anything. Same habit, less grind."* That's **Autoloader**
-(job `uc1_ingest_autoloader`) — kept, but never the headline.
+### ⑤ Provenance & audit (show this — it wins the sceptic *and* the auditor)
+- **Where every figure came from:** open `cf_period_extract` — the **`source_file`** column shows each
+  account's exact workbook (ACC-001 ← `BankRec_ACC-001_2026-07.xlsx`; the missing one ← fallback).
+- **What the run did:** `cf_ingest_log` — one row per file, **ok** or **FAILED**. Nothing silently ingested.
+- **Who changed the figures, when:** `DESCRIBE HISTORY lr_dev_aws_us_catalog.designer_recon_demo.cf_cashflow_rec`
+  (version, timestamp, user, operation); flow/logic changes are in **git**. That's the auditor answer —
+  not just a lineage picture.
+
+### ⑥ When they attack — the hard cases (all real, on tap)
+- **"What about a bad file?"** Drop a corrupt `.xlsx` into `bank_recs/` and re-run the ingest → it's
+  logged **FAILED** in `cf_ingest_log` and **quarantined**; the other accounts still process. (Proven live.)
+- **"A missing workbook?"** ACC-006 has none → the **2-cell fallback** covers it (visible in `source_file`).
+- **"Does it roll across the year?"** The rolling file already carries **Apr / May / Jun** and you just
+  appended **Jul** — one column-pair per period. Next month appends Aug; at month 12 a new FY file starts.
+  (Bump the `period` widget to run another month live.)
+- **"Six accounts isn't my 200."** Same flow, any volume — the generator's `n_accounts` scales it, and
+  it's **serverless / scale-to-zero** (pay for the run, not idle desktops or servers).
+
+### ⑦ Collaborate & schedule (live, one click each)
+- **Co-own it:** **Share → Can Edit** — two people on the *same* governed flow, every change versioned
+  (vs emailing `final_v7.xlsx`).
+- **Schedule + run history:** the ingest/append run as **Jobs/Pipelines** — set a schedule, show the
+  **run history**; runs unattended, no licensed user in the loop.
+
+### ⑧ Only if pushed on the automation — keep it reassuring
+*"Your workbooks land in the same folder you use today; the platform reads them so you don't re-key — and
+you can see exactly what it used (⑤) and that nothing failed."* That's **Auto Loader** (job
+`uc1_ingest_autoloader`): a convenience with full visibility, **not** a black box that took your files away.
 
 ### Assets — kept deliberately small (6 accounts; scale up if they ask)
 Volume `recon_landing/uc1/` — a few examples, **xlsx and csv**:
@@ -91,7 +106,8 @@ Volume `recon_landing/uc1/` — a few examples, **xlsx and csv**:
 - **formatted output →** `output/CashFlowRec_2026-07.xlsx` (also `.csv`)
 
 Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cf_prior_rec` (rolling) ·
-`cf_period_extract` (this month) · `cf_cashflow_rec` (result) · `cf_benchmark` (oracle).
+`cf_period_extract` (this month, with `source_file` provenance) · `cf_cashflow_rec` (result) ·
+`cf_benchmark` (oracle) · `cf_ingest_log` (audit: ok/FAILED per file).
 
 Notebooks (code on GitHub; run them in the workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/…`):
 - generate: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/01_generate_sources.py

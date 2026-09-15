@@ -30,6 +30,22 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 - **U1.6** Output a **formatted Excel** automatically (kill the template + Format-Painter step).
 - Plus **C1–C5**.
 
+**UC1 score — 2026-09-15: ✅ 100% (every line shown/proven on dev):**
+| Req | ✅ where it's answered |
+|---|---|
+| U1.1 read the header cells | Auto Loader ingest → `cf_period_extract` (+ `source_file` provenance) |
+| U1.2 append without the positional hack | Join + Select add `Jul_Current`/`Jul_Control` **by name** |
+| U1.3 missing-workbook fallback | ACC-006 → 2-cell fallback (visible in `source_file`) |
+| U1.4 nets to zero + exceptions flagged | `Jul_Status` Reconciled/Exception; 5/6 reconciled, ACC-003 in red |
+| U1.5 roll across the FY | rolling file carries Apr–Jul; `period` widget rolls on; month-12 → new FY file |
+| U1.6 formatted Excel | styled `.xlsx` + `.csv` written to `output/` |
+| C1 no-code | **Select** (rename) + **Prepare/Formula** (derive) — UI operators, no SQL |
+| C2 trustable | code pane (view/amend) + parity to the penny |
+| C3 collaborate | Share → Can Edit (live) |
+| C4 scheduled + audited | Jobs/Pipeline schedule + run history; `cf_ingest_log` + `DESCRIBE HISTORY` + git |
+| C5 Excel in / out | xlsx + csv in, formatted xlsx + csv out |
+| *hostile hardening* | corrupt file → FAILED/quarantined (proven live); `n_accounts` scale + serverless scale-to-zero |
+
 ---
 
 ## UC2 — Control sheet
