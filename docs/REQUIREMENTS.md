@@ -107,6 +107,23 @@ Lakeflow Jobs + Auto Loader + Unity Catalog audit.)
 
 ---
 
+## Final persona pass — 2026-09-15 (post-build, post end-to-end test)
+All three personas re-run against the tested build. **No requirement line moved off ✅ — every finding was
+presentation/framing, not an unbuilt hole.** Folded into the runbook:
+- **Lock-in rebuttal added** (was the one attack with no answer on the page): Excel/CSV stay in the client's
+  own folders, logic is exportable Spark SQL under `</> Code`, git-versioned, on open Delta — nothing trapped.
+- **Failure alerting reframed native, not roadmap** (C4): Jobs failure notifications (email/Slack/PagerDuty/
+  webhook) are out-of-the-box — we were conceding ground we hold.
+- **On-screen SQL commands → UI panels** for the nervous room: audit shown via Catalog Explorer **History tab**,
+  not typed `DESCRIBE HISTORY` (kept as a presenter aside).
+- **UC2 ✨ prompt reframed** as the technical shortcut, not the "non-technical" path — nervous room leads with
+  the click-five-boxes route; the dense nested-if prompt is offered as the fast path for a keen colleague.
+- **UC1 ✨ Generate prompt added** (hero UC previously had no verbatim recreate prompt).
+- **Scale = shown not told**: bump `n_accounts`/`n_payments` and re-run live, rather than asserting it scales.
+- **Live Genie** promoted from "next session" to a 30-second in-room move for a keen analyst.
+- Minor reassurance beats: friendly column labels in plain-English steps, exception-is-a-win framing, "you
+  never open the Python" for UC3, provenance pulled forward to the moment the table appears.
+
 *How to use this:* each review round, walk the current demo against every line above from each of the
 review personas, mark ✅/🟡/⚠️, and fold the fixes back into the build + runbook. Keep this file the
 single source of truth for "what the client actually asked for."
