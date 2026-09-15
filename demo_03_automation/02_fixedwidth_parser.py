@@ -53,6 +53,7 @@ dbutils.fs.mkdirs(incoming)
 yr, mo = map(int, period.split("-"))
 n_days = calendar.monthrange(yr, mo)[1]
 mismatch_days = set(int(x) for x in rng.choice(range(1, n_days + 1), size=2, replace=False))
+no_contra_day = int(rng.choice([d for d in range(1, n_days + 1) if d not in mismatch_days]))  # one file arrives without its contra row
 
 def rec(rtype, seq, sort, acct, payee, pence):
     return f"{rtype:<1}{seq:<5}{sort:<6}{acct:<8}{payee:<24}{str(int(pence)):<16}"
@@ -65,11 +66,12 @@ for d in range(1, n_days + 1):
         total += pence
         lines.append(rec("D", i + 1, str(rng.integers(100000, 999999)),
                          str(rng.integers(10_000_000, 99_999_999)), f"Payee {i:04d}", pence))
-    contra = total + (int(rng.integers(50, 500)) * 100 if d in mismatch_days else 0)   # break a couple
-    lines.append(rec("C", 99999, "", "", "CONTRA TOTAL", contra))
+    if d != no_contra_day:                                          # this one is missing its contra row → must be FLAGGED, not skipped
+        contra = total + (int(rng.integers(50, 500)) * 100 if d in mismatch_days else 0)
+        lines.append(rec("C", 99999, "", "", "CONTRA TOTAL", contra))
     dbutils.fs.put(f"{incoming}/BDX_{yr}-{mo:02d}-{d:02d}.txt", "\n".join(lines) + "\n", True)
 
-print(f"wrote {n_days} daily files for {period}; contra deliberately broken on days {sorted(mismatch_days)}")
+print(f"wrote {n_days} daily files for {period}; contra broken on days {sorted(mismatch_days)}; no contra row on day {no_contra_day}")
 
 # COMMAND ----------
 
@@ -103,16 +105,28 @@ spark.sql(f"COMMENT ON TABLE {fqn}.fw_bdx_consolidated IS 'UC3b consolidated det
 
 # COMMAND ----------
 
+# start from EVERY file that landed, so an empty / no-contra file can't silently vanish
+# value-level integrity, not just file-count: a row whose amount doesn't parse must NOT silently become 0
+all_files = spark.createDataFrame([(f.name,) for f in dbutils.fs.ls(incoming)], "source_file string")
 detail_agg = detail.groupBy("source_file").agg(
-    F.count("*").alias("detail_rows"), F.round(F.sum("amount"), 2).alias("detail_sum"))
-contra = parsed.where("record_type = 'C'").select(
-    "source_file", F.round("amount", 2).alias("contra_amount"))
+    F.count("*").alias("detail_rows"),
+    F.sum(F.when(F.col("amount").isNull(), 1).otherwise(0)).alias("unparsed_rows"),   # amount failed to parse → flag it
+    F.round(F.sum("amount"), 2).alias("detail_sum"))
+contra = parsed.where("record_type = 'C'").groupBy("source_file").agg(
+    F.count("*").alias("contra_rows"), F.round(F.sum("amount"), 2).alias("contra_amount"))
 
-log = (detail_agg.join(contra, "source_file", "left")
+log = (all_files.join(detail_agg, "source_file", "left").join(contra, "source_file", "left")
        .withColumn("difference", F.round(F.col("detail_sum") - F.col("contra_amount"), 2))
-       .withColumn("status", F.when(F.abs("difference") < 0.005, "MATCH").otherwise("MISMATCH")))
+       .withColumn("status",
+           F.when(F.col("detail_rows").isNull(), "EMPTY")
+            .when(F.col("unparsed_rows") > 0, "PARSE ISSUE")        # a shifted/ragged line — caught, not summed as 0
+            .when(F.col("contra_rows") > 1, "MULTI CONTRA")         # a second contra row — caught, not double-counted
+            .when(F.col("contra_amount").isNull(), "NO CONTRA")
+            .when(F.abs("difference") < 0.005, "MATCH")
+            .otherwise("MISMATCH")))
 log.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.fw_contra_log")
-spark.sql(f"COMMENT ON TABLE {fqn}.fw_contra_log IS 'UC3b per-file contra reconciliation (detail sum vs contra row). Synthetic.'")
+spark.sql(f"COMMENT ON TABLE {fqn}.fw_contra_log IS 'UC3b per-file reconciliation — every landed file statused MATCH / MISMATCH / NO CONTRA / PARSE ISSUE / MULTI CONTRA / EMPTY (value-level, not just file count). Synthetic.'")
+assert spark.table(f"{fqn}.fw_contra_log").count() == all_files.count(), "a landed file is missing from the log"
 
 # COMMAND ----------
 
@@ -124,15 +138,13 @@ spark.sql(f"COMMENT ON TABLE {fqn}.fw_contra_log IS 'UC3b per-file contra reconc
 (spark.table(f"{fqn}.fw_bdx_consolidated").coalesce(1)
     .write.mode("overwrite").option("header", True).csv(f"{output}/consolidated_{period}"))
 
-s = spark.sql(f"""SELECT count(*) files, sum(CASE WHEN status='MATCH' THEN 1 ELSE 0 END) matched,
-                         sum(CASE WHEN status='MISMATCH' THEN 1 ELSE 0 END) mismatched
-                  FROM {fqn}.fw_contra_log""").first()
-bad = spark.sql(f"SELECT source_file, difference FROM {fqn}.fw_contra_log WHERE status='MISMATCH' ORDER BY source_file").collect()
+counts = {r["status"]: r["n"] for r in spark.sql(f"SELECT status, count(*) n FROM {fqn}.fw_contra_log GROUP BY status").collect()}
+total_files = sum(counts.values())
+bad = spark.sql(f"SELECT source_file, status, difference FROM {fqn}.fw_contra_log WHERE status <> 'MATCH' ORDER BY status, source_file").collect()
 summary = (f"BDX consolidation — {period}\n"
-           f"files processed : {s['files']}\n"
-           f"contra matched  : {s['matched']}\n"
-           f"contra mismatch : {s['mismatched']}\n"
-           + ("".join(f"  ! {r['source_file']}  diff {r['difference']:.2f}\n" for r in bad)
+           f"files processed : {total_files} (every landed file accounted for)\n"
+           + "".join(f"  {st:<13}: {counts[st]}\n" for st in sorted(counts))
+           + ("".join(f"  ! {r['source_file']}  {r['status']}  diff {r['difference'] if r['difference'] is not None else '-'}\n" for r in bad)
               if bad else "  all files tied to their contra row\n"))
 dbutils.fs.put(f"{output}/run_summary_{period}.txt", summary, True)
 print(summary)

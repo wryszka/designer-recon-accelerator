@@ -201,26 +201,59 @@ parity + recon + Excel (job `uc2_control_sheet_parity`) — https://github.com/w
 
 # UC3 — Scheduled automation  *(NOT Designer — this is the point)*
 
-### ① The requirement (walk them through this)
-Two Python scripts they run **by hand** today:
-- **3a — file staging:** files land in **two folders**; pick, **for each report code, the correct
-  version by file name** (not the latest-arrived), and **copy** them to a destination. No data change.
-- **3b — fixed-width BDX:** each day a **fixed-width** file lands; monthly, run all ~30 of last month's,
-  **parse by position**, **contra-check each file** (detail rows must sum to that file's contra row),
-  **consolidate** into one output, **log a summary**.
+### ① The requirement — what they asked for (say this)
+Two Python scripts they run **by hand** today. The question they set: *"can the platform schedule and log
+this like our scripts — unattended and audited?"* **Answer: yes — Lakeflow Jobs + Auto Loader + Unity
+Catalog audit. No Designer canvas — and that honesty is the point.**
+- **3a — file staging:** files land in **two folders**; pick, per report code, the **correct version by
+  file name** (not latest-arrived), and **copy** to a destination. No data change.
+- **3b — fixed-width BDX:** monthly, run **all ~30** of last month's **fixed-width** files → **parse by
+  position** → **contra-check each** (detail rows sum to the file's contra row) → **consolidate** → log.
 
-Their question: *can the platform schedule and log this like our scripts?* Answer: **yes — Lakeflow Jobs
-+ Autoloader + Unity Catalog audit.** No canvas here — that's why it isn't Designer.
+**The bar:** scheduled · unattended · **audited** · **every file accounted for** (nothing silently dropped,
+mis-picked or mis-parsed) · runs like their script, but governed.
 
-### ② Assets (links)
-- **3a** — run as job **`automation_file_staging`**; code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/01_file_staging.py · tables `af_files_staged`, `af_staging_audit` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_staging_audit)
-- **3b** — run as job **`automation_bdx_parser`**; code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/02_fixedwidth_parser.py · tables `fw_bdx_consolidated`, `fw_contra_log` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_contra_log)
+### ② The story you tell (governance over cron)
+*"You already schedule a script. The difference: it fires the moment a file lands, it can't silently lose
+or mis-read a file — every file gets a visible verdict — and the whole run is audited on the platform,
+not on someone's laptop."*
 
-### ③ Run it (~5 min, no build)
-Open each notebook (links) and **Run all**, or run jobs `automation_file_staging` / `automation_bdx_parser`.
-Show: 3a picked the **right version per code** and copied it + `af_staging_audit`; 3b's **`fw_contra_log`**
-= 28 files tie, 2 don't (seeded breaks), all consolidated. **The point:** Job run history + the log
-tables + lineage = scheduled, unattended, audited — nobody moves a file.
+### ③ Run it (~5 min, no build) + the reconciliation that wins the room
+Run jobs **`automation_file_staging`** (3a) and **`automation_bdx_parser`** (3b) — or the notebooks.
+- **3a — every file accounted for:** `af_version_audit` marks each file **chosen / superseded /
+  unrecognized** and reconciles: **9 seen = 5 chosen + 4 superseded + 0 unrecognized**, 5 copied. You *see*
+  which version was picked and why the others weren't — nothing silently ignored.
+- **3b — every file statused (value-level, not just count):** `fw_contra_log` gives each file **MATCH /
+  MISMATCH / NO CONTRA / PARSE ISSUE / MULTI CONTRA / EMPTY**, asserted to cover **every** landed file —
+  here **30 = 27 MATCH + 2 MISMATCH + 1 NO CONTRA**. A ragged line that won't parse → **PARSE ISSUE**
+  (never summed as 0); a second contra row → **MULTI CONTRA** (never double-counted).
+- **The point:** Job **run history** + these audit tables + Catalog **lineage** = scheduled, unattended,
+  **audited** — and it **fails loudly**, it never hides a bad file behind a green tick.
+
+### ④ Trust & audit
+- The status logs *are* the audit: who ran it (run history), which file was used/rejected and why
+  (`af_version_audit`), which files didn't tie (`fw_contra_log`). Plus `DESCRIBE HISTORY` + git on the code.
+- The **asserts are DQ gates** — the file-count and value-level checks **fail the run** if anything is
+  unaccounted for, so the control can't silently pass.
+
+### ⑤ When they attack — honest answers
+- **"A bad file — no contra / empty / a shifted column?"** Shown: NO CONTRA / EMPTY / **PARSE ISSUE** —
+  flagged and kept out of the totals, not silently absorbed. (Proven live.)
+- **"cron already does this."** True for the middle; the platform adds **on-arrival triggering, governed
+  audit + lineage, DQ gates, and no desktop dependency** — the same governed home as UC1/UC2.
+- **Known edges — we'll be straight (roadmap, not claimed):** "highest version by name" is a heuristic (a
+  *re-issued* older version needs a smarter rule); **idempotent single-file re-run + failure alerting**;
+  and **big-volume patterns** (the demo notebooks list/collect at small scale). We name these rather than
+  pretend — each is a standard platform pattern to add.
+
+### Assets — kept small (2 folders / 5 codes; ~30 daily files)
+Volume `recon_landing/`: **3a** `uc3a/sources/{folder_a,folder_b}` → `uc3a/destination`; **3b**
+`uc3b/incoming` → `uc3b/output` (consolidated CSV + `run_summary_*.txt`).
+Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `af_version_audit` · `af_files_staged` ·
+`af_staging_audit` (3a) · `fw_bdx_consolidated` · `fw_contra_log` (3b).
+Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_03_automation/…`):
+3a — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/01_file_staging.py ·
+3b — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/02_fixedwidth_parser.py
 
 **Closing line (only if time):** *same governed data → Genie + dashboard + forecasting = the next session.*
 

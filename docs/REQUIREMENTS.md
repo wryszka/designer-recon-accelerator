@@ -89,6 +89,22 @@ Lakeflow Jobs + Auto Loader + Unity Catalog audit.)
 - **U3b.5** A **run log / summary** — which files processed + contra pass/fail (a summary email).
 - **U3b.6** Scheduled, unattended, audited.
 
+**UC3 score — 2026-09-15: ✅ 100% + hardened (proven on dev):**
+| Req | ✅ where it's answered |
+|---|---|
+| U3a.1 correct version by name (2 folders) | `af_version_audit` picks highest version per folder+code |
+| U3a.2 copy to destination, no change | 5 chosen files copied; data untouched |
+| U3a.3 scheduled / on-arrival | Job schedule + Auto Loader |
+| U3b.1 parse fixed-width by position | substring-by-position parse |
+| U3b.2 source_file tag | `source_file` on every row |
+| U3b.3 per-file contra check | `fw_contra_log` MATCH/MISMATCH |
+| U3b.4 consolidate | `fw_bdx_consolidated` + CSV |
+| U3b.5 run log / summary | `fw_contra_log` + `run_summary_*.txt` |
+| U3b.6 scheduled + unattended + audited | Jobs + run history + audit tables |
+| *file reconciliation* | 3a: 9 seen = 5 chosen + 4 superseded + 0 unrecognized · 3b: every file statused, asserted |
+| *value-level integrity* | PARSE ISSUE (unparsed amount) / MULTI CONTRA / NO CONTRA / EMPTY — nothing silently dropped or mis-summed |
+| *honest roadmap (not claimed)* | version-correctness beyond highest-name; idempotent single-file re-run + failure alerting; big-volume patterns |
+
 ---
 
 *How to use this:* each review round, walk the current demo against every line above from each of the

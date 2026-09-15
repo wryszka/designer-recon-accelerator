@@ -81,12 +81,13 @@ spark.sql(f"DROP TABLE IF EXISTS {fqn}.af_files_bronze")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Select the highest version per (folder, report code) — purely by file name
+# MAGIC ## Account for EVERY file: chosen (highest version) / superseded / unrecognized
 
 # COMMAND ----------
 
+# every file gets a disposition — nothing is silently ignored or mis-staged
 spark.sql(f"""
-CREATE OR REPLACE TABLE {fqn}.af_files_staged AS
+CREATE OR REPLACE TABLE {fqn}.af_version_audit AS
 WITH parsed AS (
   SELECT path,
          element_at(split(path, '/'), -1)                          AS file_name,
@@ -94,16 +95,19 @@ WITH parsed AS (
          regexp_extract(path, 'ACS_(\\\\d+)_', 1)                    AS report_code,
          CAST(regexp_extract(path, '_v(\\\\d+)_', 1) AS INT)         AS version
   FROM {fqn}.af_files_bronze)
-SELECT folder, report_code, version, file_name, path FROM (
-  SELECT *, row_number() OVER (PARTITION BY folder, report_code ORDER BY version DESC) AS rn
-  FROM parsed)
-WHERE rn = 1
+SELECT folder, report_code, version, file_name, path,
+       CASE WHEN report_code = '' OR version IS NULL THEN 'unrecognized'
+            WHEN version = max(version) OVER (PARTITION BY folder, report_code) THEN 'chosen'
+            ELSE 'superseded' END                                  AS disposition
+FROM parsed
 """)
+spark.sql(f"COMMENT ON TABLE {fqn}.af_version_audit IS 'UC3a every file seen + disposition (chosen/superseded/unrecognized). Synthetic.'")
+spark.sql(f"CREATE OR REPLACE TABLE {fqn}.af_files_staged AS SELECT folder, report_code, version, file_name, path FROM {fqn}.af_version_audit WHERE disposition = 'chosen'")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Copy the chosen files to the destination folder, and log the run
+# MAGIC ## Copy the chosen files, log the run, and reconcile (seen = chosen + superseded + unrecognized)
 
 # COMMAND ----------
 
@@ -113,18 +117,19 @@ for r in staged:
     dbutils.fs.cp(r["path"], f"{dest}/{r['file_name']}")
     copied += 1
 
-spark.sql(f"""CREATE TABLE IF NOT EXISTS {fqn}.af_staging_audit
-  (run_ts TIMESTAMP, files_seen INT, codes INT, files_staged INT, files_copied INT)""")
-spark.sql(f"""INSERT INTO {fqn}.af_staging_audit
-  SELECT current_timestamp(),
-         (SELECT count(*) FROM {fqn}.af_files_bronze),
-         (SELECT count(DISTINCT concat(folder, report_code)) FROM {fqn}.af_files_staged),
-         (SELECT count(*) FROM {fqn}.af_files_staged), {copied}""")
+d = {row["disposition"]: row["n"] for row in spark.sql(
+    f"SELECT disposition, count(*) n FROM {fqn}.af_version_audit GROUP BY disposition").collect()}
+seen = spark.table(f"{fqn}.af_files_bronze").count()
+chosen, superseded, unrecognized = d.get("chosen", 0), d.get("superseded", 0), d.get("unrecognized", 0)
+assert chosen + superseded + unrecognized == seen, "file-count reconciliation failed — a file is unaccounted for"
 
-print(f"seen {spark.table(f'{fqn}.af_files_bronze').count()} files · "
-      f"staged {len(staged)} (one per folder+code) · copied {copied} to destination")
-display(spark.sql(f"SELECT folder, report_code, version, file_name FROM {fqn}.af_files_staged ORDER BY folder, report_code"))
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {fqn}.af_staging_audit
+  (run_ts TIMESTAMP, files_seen INT, chosen INT, superseded INT, unrecognized INT, files_copied INT)""")
+spark.sql(f"""INSERT INTO {fqn}.af_staging_audit VALUES
+  (current_timestamp(), {seen}, {chosen}, {superseded}, {unrecognized}, {copied})""")
+
+print(f"seen {seen} = chosen {chosen} + superseded {superseded} + unrecognized {unrecognized}  ·  copied {copied}")
 print("Destination now holds:", [f.name for f in dbutils.fs.ls(dest)])
-display(spark.sql(f"SELECT * FROM {fqn}.af_staging_audit ORDER BY run_ts DESC"))
-print("Schedule as a Lakeflow Job (monthly) or let Autoloader fire on arrival. Every run appends "
-      "to af_staging_audit; Job run history + system.access.audit complete the trail — no manual moves.")
+display(spark.sql(f"SELECT folder, report_code, version, disposition, file_name FROM {fqn}.af_version_audit ORDER BY folder, report_code, version DESC"))
+print("Schedule as a Lakeflow Job (monthly) or let Autoloader fire on arrival. The version audit shows "
+      "exactly which file was chosen and why the others weren't — no file silently ignored, none mis-picked.")
