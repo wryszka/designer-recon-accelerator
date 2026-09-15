@@ -1,14 +1,17 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # UC2 · Control sheet + parity + **population reconciliation** + formatted Excel
+# MAGIC # UC2 · the receipt behind the Designer flow (NOT shown in the room)
 # MAGIC
-# MAGIC The coded mirror of the **Lakeflow Designer** flow, hardened so a hostile auditor can't break it:
+# MAGIC The **coded mirror** of the no-code **Lakeflow Designer** flow — **not** what a customer builds or
+# MAGIC maintains. In the room the **Designer canvas** does the join / branch / aggregate with **no code**, the
+# MAGIC reconciliation shows as a **results table**, and the Excel comes from a **standard download**.
 # MAGIC 1. join `cs_payments` to `cs_category_lookup` on `supplier` — **LEFT join, so no payment is dropped**,
 # MAGIC 2. derive the **branch** group; a supplier not in the lookup gets its **own Unmatched group**,
 # MAGIC 3. **aggregate** each group total,
 # MAGIC 4. **population reconciliation** — prove **rows in = rows grouped** (0 dropped), **0 duplicate
-# MAGIC    suppliers** (0 fan-out), and **Σ groups = Σ all payments** (the true whole),
-# MAGIC 5. write a **formatted Excel** (`.xlsx` + `.csv`).
+# MAGIC    suppliers** (0 fan-out), **Σ groups = Σ all payments** (the true whole). Shown as the table
+# MAGIC    `cs_population_recon`, **not as code**. *(The benchmark comparison is demo-only QA — no benchmark in production.)*
+# MAGIC 5. **standard export:** plain `.csv` + `.xlsx` — stock save, **no formatting code**.
 # MAGIC
 # MAGIC "Parts tie to the whole" only means something once you've proven the whole is *every* payment.
 
@@ -77,36 +80,13 @@ assert ok, "UC2 correctness check failed"
 
 # COMMAND ----------
 
-# ---- 5. formatted Excel (+ csv) out ----
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-
+# ---- 5. standard export — stock CSV + Excel, NO formatting code to write or maintain ----
+# Plain "save as CSV / save as Excel" — the same download any table gives you, not hand-styled Python.
+# The Unmatched group and MAIN row are labelled in the data itself; any highlighting lives in the
+# dashboard/Genie layer, not in code here.
 out = control.copy()
-wb = Workbook(); ws = wb.active; ws.title = "Control sheet"
-hdr = PatternFill("solid", fgColor="1B3A4B"); hf = Font(bold=True, color="FFFFFF")
-thin = Side(style="thin", color="D9D9D9"); bd = Border(thin, thin, thin, thin)
-ws.append(list(out.columns))
-for j2, c in enumerate(out.columns, 1):
-    cell = ws.cell(1, j2); cell.fill = hdr; cell.font = hf; cell.alignment = Alignment(horizontal="center"); cell.border = bd
-for _, r in out.iterrows():
-    ws.append([r[c] for c in out.columns])
-for i in range(2, ws.max_row + 1):
-    label = ws.cell(i, 1).value
-    for j2, c in enumerate(out.columns, 1):
-        cell = ws.cell(i, j2); cell.border = bd
-        if c in ("branch_total", "variance"):
-            cell.number_format = "#,##0.00"
-        if label == "MAIN (all payments)":
-            cell.font = Font(bold=True)
-        elif label == "Unmatched (no category)":
-            cell.font = Font(color="C00000")                        # flag the unmatched group in red
-for j2, c in enumerate(out.columns, 1):
-    ws.column_dimensions[get_column_letter(j2)].width = 26 if c == "branch" else 16
-ws.freeze_panes = "A2"
-_t = tempfile.mkdtemp(); wb.save(f"{_t}/cs.xlsx")
 os.makedirs(f"{vroot}/output", exist_ok=True)
-shutil.copy(f"{_t}/cs.xlsx", f"{vroot}/output/ControlSheet.xlsx")
 out.to_csv(f"{vroot}/output/ControlSheet.csv", index=False)
-print(f"formatted Excel + csv → {vroot}/output/")
+out.to_excel(f"{vroot}/output/ControlSheet.xlsx", index=False)          # one line, stock pandas export
+print(f"CSV + Excel → {vroot}/output/")
 display(spark.table(f"{fqn}.cs_population_recon"))

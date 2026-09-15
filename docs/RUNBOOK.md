@@ -18,6 +18,13 @@ You **never write SQL**. If a step needs an expression, it's **⚠️-marked** b
 removes even those. (The generated SQL is viewable under **</> Code** *only if a technical colleague
 wants to review it* — the business user never touches it.)
 
+**And nothing is hand-coded to maintain.** The reconciliation logic *is* the visual flow; the reconciliation
+*checks* show as **results tables**; the Excel is a **standard download** (Save As). There is no bespoke
+script anyone owns. Where code genuinely runs unattended (file ingest, scheduling) it's **stock platform
+plumbing — like the macro behind an Excel button**, set up once, never edited. *(The `…parity` /
+`…parse_append` notebooks in the repo are our **demo QA + a coded mirror to prove the flow ties out** — a
+technical appendix for your engineers, **never** opened on the projector.)*
+
 **Everything opens from here:**
 - **Repo:** https://github.com/wryszka/designer-recon-accelerator
 - **Notebooks (code):** https://github.com/wryszka/designer-recon-accelerator — *to open/run, in the workspace go to `Workspace → Shared → designer-recon-accelerator`*
@@ -78,13 +85,21 @@ All seven are **UI operators — no SQL typed, no code written.**
 
 Set Output, **Run**. (This is the recreate-in-Designer prompt — tables as inputs, no Excel drag needed.)
 
-### ④ Prove it + Excel out
-- Run **`02_parse_append_parity.py`** → **✅ PARITY to the penny** vs `cf_benchmark`; it writes the
-  **formatted Excel** to `output/CashFlowRec_2026-07.xlsx` (+ `.csv`). **5 of 6 reconciled, 1 exception
-  (ACC-003)** — shown in red.
+### ④ Prove it — reconciliation on the canvas, Excel from a standard download
+**Never say "notebook" and never open code on screen.** The two things you show:
+- **The reconciliation is already done on the canvas** — the **`Jul_Status`** column reads Reconciled /
+  Exception per account (**5 of 6 reconciled; ACC-003 the exception**). No extra step, no code — it's in the flow.
+- **Get the Excel:** press **Run** on the flow / the monthly Job and a plain **`.csv` + `.xlsx`** lands in the
+  folder — a **standard download**, the same run that fires automatically each month. **There is no
+  formatting code to write or maintain**, and nothing to project.
 - *"Each account's Control nets to zero — that's the reconciliation; the one that doesn't is flagged."*
-  *(Frame the red row as a win, not a fault: an exception is exactly what you **want** the tool to surface —
-  it's doing your checking for you, not breaking. Nobody broke month-end; the control just did its job.)*
+  *(Frame the exception as a win: it's the tool doing your checking, not breaking. Nobody broke month-end.)*
+
+> **If asked "is there code / a notebook behind that?"** — *"No. The logic is the visual flow you just
+> watched; the Excel is a standard download, like Save As. There's nothing hand-written for anyone to
+> maintain."* **Backstage only (never presented):** we separately validate every figure to the penny against
+> an independent calculation — that's *our* demo QA (there's no such benchmark in a real deployment). Hold it
+> for a skeptic; don't lead with it, don't open it.
 
 ### ⑤ Provenance & audit (show this — it wins the sceptic *and* the auditor)
 - **Where every figure came from:** open `cf_period_extract` — the **`source_file`** column shows each
@@ -130,13 +145,13 @@ it's the opposite of the "you still drop your file" reassurance the nervous room
 Volume `recon_landing/uc1/` — a few examples, **xlsx and csv**:
 - **drag this →** `rolling/CashFlowRec_2026-06.xlsx` (also `.csv`)
 - account workbooks (5) → `bank_recs/` · the missing-account fallback → `fallback/`
-- **formatted output →** `output/CashFlowRec_2026-07.xlsx` (also `.csv`)
+- **Excel/CSV output →** `output/CashFlowRec_2026-07.xlsx` (also `.csv`) — standard download, no formatting code
 
 Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cf_prior_rec` (rolling) ·
 `cf_period_extract` (this month, with `source_file` provenance) · `cf_cashflow_rec` (result) ·
 `cf_benchmark` (oracle) · `cf_ingest_log` (audit: ok/FAILED per file).
 
-Notebooks (code on GitHub; run them in the workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/…`):
+Notebooks — **technical appendix: for your engineers, never the projector** (GitHub; run in the workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/…`):
 - generate: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/01_generate_sources.py
 - Autoloader ingest (job `uc1_ingest_autoloader`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/00_ingest_autoloader.py
 - parity + Excel (job `uc1_parse_append_parity`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/02_parse_append_parity.py
@@ -185,16 +200,19 @@ the fast path, not the beginner path — it packs the whole branch rule into one
 
 Set Output, **Run**. Same result — English in, no SQL. *(The grand total + tie-check is ④, so the canvas stays simple.)*
 
-### ④ Prove it — population reconciliation + Excel out (the beat that wins the room)
-Run **`02_parity.py`** (job `uc2_control_sheet_parity`). It doesn't just flash "0.00" — it proves the total is
-the **whole population**:
+### ④ Prove it — population reconciliation as a results table (the beat that wins the room)
+**Show the table `cs_population_recon` on screen — a results table, not code.** It doesn't just flash "0.00";
+it proves the total is the **whole population**:
 - **Every payment accounted for:** `400 in = 392 matched + 8 unmatched` — **0 dropped**.
 - **No double-counting:** rows after the join = 400; **0 duplicate suppliers** in the lookup — **0 fan-out**.
 - **Groups sum to all payments:** Σ groups = Σ all = **−322,322.44**, **variance 0.00** — including the Unmatched group.
-- Writes the **formatted control sheet** to `output/ControlSheet.xlsx` (+ `.csv`): **Unmatched in red, MAIN in bold**.
+- It's a **data-quality gate** — the run **fails** if the control ever breaks (⑤), so it can't silently go wrong.
+- **Excel out:** press **Run** → plain **`.csv` + `.xlsx`** in the folder — a **standard download, no
+  formatting code to maintain**.
 
 *"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total — is
-exactly what this reconciles. Nothing hides behind a green 0.00."* (See table `cs_population_recon`.)
+exactly what this reconciles. Nothing hides behind a green 0.00."* *(Backstage only, never presented: a
+benchmark comparison validates our demo — there's no benchmark in a real deployment.)*
 
 ### ⑤ Trust & audit
 - **Lineage drill-through (Excel can't):** in Catalog Explorer, trace a group total → the aggregate → the join
@@ -228,7 +246,7 @@ Volume `recon_landing/uc2/` — **xlsx + csv**: **drag** `inputs/Payments.xlsx` 
 **output** `output/ControlSheet.xlsx` (+ `.csv`).
 Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cs_payments` · `cs_category_lookup` ·
 `cs_control_sheet` (result) · `cs_benchmark` (oracle) · `cs_population_recon` (rows in = grouped, 0 dropped/dup).
-Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/…`):
+Notebooks — **technical appendix: engineers, not the projector** (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/…`):
 generate — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/01_generate_sources.py ·
 parity + recon + Excel (job `uc2_control_sheet_parity`) — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py
 
@@ -303,13 +321,15 @@ Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerato
 ## Fallbacks — if short on time or it goes sideways
 1. **✨ prompt** (③ above) — the no-code hero. 2. **Open the pre-saved flow** — if you built + Saved
 `Cash-flow rec — monthly` beforehand. 3. **Drag-drop by hand** (the ⚠️ steps need an expression).
-4. **No Designer** — show `cf_cashflow_rec` + the formatted Excel + run `02_parse_append_parity.py` for ✅ parity.
+4. **No Designer** — show the finished **`cf_cashflow_rec`** table (the `Jul_Status` column) + the exported
+   **Excel in the folder**. *(The coded mirror is the backstage receipt for you — don't project it.)*
 
 ## Lines to land
 1. *No code — you type plain English (or drag boxes); Designer writes any SQL, and the business user never sees it.*
-2. *Everything starts and ends in Excel; the positional hack that made this "disgusting" is gone, and the formatted Excel comes out automatically.*
+2. *Everything starts and ends in Excel; the positional hack that made this "disgusting" is gone, and the Excel comes out from a standard download — nothing to hand-format.*
 3. *It's reconciled to the penny, and a technical colleague can still open and amend the logic.*
 4. *Nobody moves a file: it lands, and the work runs.*
+5. *Nothing is hand-coded to maintain — the logic is the visual flow, the Excel is a standard download; there's no bespoke script anyone owns.*
 
 ## (Re)build the data — CLI, profile `DEV`
 ```bash

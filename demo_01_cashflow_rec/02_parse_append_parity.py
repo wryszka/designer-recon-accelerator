@@ -1,16 +1,17 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # UC1 · Append + reconcile + parity + formatted Excel
+# MAGIC # UC1 · the receipt behind the Designer flow (NOT shown in the room)
 # MAGIC
-# MAGIC The coded mirror of the **Lakeflow Designer** flow — so we can prove it ties out:
-# MAGIC 1. join the rolling file (`cf_prior_rec`) to this month's numbers (`cf_period_extract`, from the
-# MAGIC    Autoloader ingest) on `account_code`,
+# MAGIC This is the **coded mirror** of the no-code **Lakeflow Designer** flow. It is **not** part of what a
+# MAGIC customer builds or maintains — it exists so *we* can prove the visual flow ties out. In the room the
+# MAGIC **Designer canvas** does the reconciliation (steps 1–3) with **no code**, and the analyst gets the
+# MAGIC Excel from a **standard download** — nobody writes or maintains this.
+# MAGIC 1. join the rolling file (`cf_prior_rec`) to this month's numbers (`cf_period_extract`) on `account_code`,
 # MAGIC 2. derive **`Jul_Status`** = *Reconciled* when Control nets to 0, else *Exception*,
-# MAGIC 3. append **`Jul_Current`** / **`Jul_Control`**,
-# MAGIC 4. prove it matches the benchmark **to the penny**,
-# MAGIC 5. write the **formatted Excel** output (`.xlsx` + `.csv`).
-# MAGIC
-# MAGIC In the room the Designer canvas does steps 1–3 (no code); this notebook is the receipt.
+# MAGIC 3. append **`Jul_Current`** / **`Jul_Control`**  — *(1–3 = exactly what the Designer canvas produces)*,
+# MAGIC 4. **demo-only QA:** check it matches the synthetic benchmark to the penny (there is **no benchmark**
+# MAGIC    in a real deployment — this is scaffolding to prove our demo, never presented),
+# MAGIC 5. **standard export:** drop plain `.csv` + `.xlsx` into the folder — stock save, **no formatting code**.
 
 # COMMAND ----------
 
@@ -48,7 +49,7 @@ spark.sql(f"COMMENT ON TABLE {fqn}.cf_cashflow_rec IS 'UC1 produced rolling rec:
 
 # COMMAND ----------
 
-# ---- 4. parity vs the benchmark, to the penny ----
+# ---- 4. DEMO-ONLY QA: parity vs the synthetic benchmark (no benchmark exists in production) ----
 bench = spark.table(f"{fqn}.cf_benchmark").toPandas()
 cols = [c for c in bench.columns if c in out.columns]
 a = out[cols].sort_values("account_code").reset_index(drop=True)
@@ -61,33 +62,14 @@ assert mism == 0 and status_mism == 0, "parity failed"
 
 # COMMAND ----------
 
-# ---- 5. formatted Excel (+ csv) out ----
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-
-wb = Workbook(); ws = wb.active; ws.title = f"CashFlowRec {period}"
-hdr = PatternFill("solid", fgColor="1B3A4B"); hf = Font(bold=True, color="FFFFFF")
-thin = Side(style="thin", color="D9D9D9"); bd = Border(thin, thin, thin, thin)
-ws.append(list(out.columns))
-for j, c in enumerate(out.columns, 1):
-    cell = ws.cell(1, j); cell.fill = hdr; cell.font = hf; cell.alignment = Alignment(horizontal="center"); cell.border = bd
-for _, r in out.iterrows():
-    ws.append([r[c] for c in out.columns])
-for i in range(2, ws.max_row + 1):
-    for j, c in enumerate(out.columns, 1):
-        cell = ws.cell(i, j); cell.border = bd
-        if c.endswith("_Current") or c.endswith("_Control"):
-            cell.number_format = "#,##0.00"
-        if (c == C_ST and cell.value == "Exception") or (c == C_CTL and isinstance(cell.value, (int, float)) and abs(cell.value) > 0.005):
-            cell.font = Font(color="C00000", bold=True)
-for j, c in enumerate(out.columns, 1):
-    ws.column_dimensions[get_column_letter(j)].width = 22 if c == "account_name" else 14
-ws.freeze_panes = "C2"
+# ---- 5. standard export — stock CSV + Excel, NO formatting code to write or maintain ----
+# This is a plain "save as CSV / save as Excel", the same download any table gives you — not hand-styled
+# Python. In the room the analyst just downloads the Designer flow's output; here we drop both file types
+# into the folder as examples. Exception highlighting lives in the dashboard/Genie layer, not in code here.
 os.makedirs(f"{vroot}/output", exist_ok=True)
-_t = tempfile.mkdtemp(); wb.save(f"{_t}/out.xlsx"); shutil.copy(f"{_t}/out.xlsx", f"{vroot}/output/CashFlowRec_{period}.xlsx")
 out.to_csv(f"{vroot}/output/CashFlowRec_{period}.csv", index=False)
+out.to_excel(f"{vroot}/output/CashFlowRec_{period}.xlsx", index=False)   # one line, stock pandas export
 
 recon = int((out[C_ST] == "Reconciled").sum())
-print(f"formatted Excel + csv → {vroot}/output/  ·  {recon}/{len(out)} reconciled, {len(out)-recon} exception(s)")
+print(f"CSV + Excel → {vroot}/output/  ·  {recon}/{len(out)} reconciled, {len(out)-recon} exception(s)")
 display(spark.table(f"{fqn}.cf_cashflow_rec"))
