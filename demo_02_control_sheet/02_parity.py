@@ -11,7 +11,8 @@
 # MAGIC 4. **population reconciliation** — prove **rows in = rows grouped** (0 dropped), **0 duplicate
 # MAGIC    suppliers** (0 fan-out), **Σ groups = Σ all payments** (the true whole). Shown as the table
 # MAGIC    `cs_population_recon`, **not as code**. *(The benchmark comparison is demo-only QA — no benchmark in production.)*
-# MAGIC 5. **standard export:** plain `.csv` + `.xlsx` — stock save, **no formatting code**.
+# MAGIC 5. **formatted export (hidden setup, never shown):** a small set-once template (bold header, number
+# MAGIC    format, Unmatched in red, MAIN in bold) — reused, not bespoke per-rec code.
 # MAGIC
 # MAGIC "Parts tie to the whole" only means something once you've proven the whole is *every* payment.
 
@@ -80,14 +81,30 @@ assert ok, "UC2 correctness check failed"
 
 # COMMAND ----------
 
-# ---- 5. standard export — stock CSV + Excel, NO formatting code to write or maintain ----
-# Plain "save as CSV / save as Excel" — the same download any table gives you, not hand-styled Python.
-# The Unmatched group and MAIN row are labelled in the data itself; any highlighting lives in the
-# dashboard/Genie layer, not in code here.
+# ---- 5. formatted Excel out — a small reusable export template (HIDDEN setup; never shown in the room) ----
+# Bold header + number format + Unmatched in red + MAIN in bold. Set-once, reused (not bespoke per-rec
+# code), never on the demo surface. Local write then copy (Volumes FUSE has no random-access xlsx write).
+from openpyxl.styles import Font, PatternFill
 out = control.copy()
 os.makedirs(f"{vroot}/output", exist_ok=True)
 out.to_csv(f"{vroot}/output/ControlSheet.csv", index=False)
-# stock to_excel, no styling; write local first then copy (Volumes FUSE has no random-access write for xlsx)
-_t = tempfile.mkdtemp(); out.to_excel(f"{_t}/cs.xlsx", index=False); shutil.copy(f"{_t}/cs.xlsx", f"{vroot}/output/ControlSheet.xlsx")
-print(f"CSV + Excel → {vroot}/output/")
+_t = tempfile.mkdtemp(); xpath = f"{_t}/cs.xlsx"
+with pd.ExcelWriter(xpath, engine="openpyxl") as xw:
+    out.to_excel(xw, index=False, sheet_name="Control sheet")
+    ws = xw.sheets["Control sheet"]
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF"); cell.fill = PatternFill("solid", fgColor="1B3A4B")
+    num_cols = [i + 1 for i, c in enumerate(out.columns) if c in ("branch_total", "variance")]
+    for r in range(2, ws.max_row + 1):
+        for i in num_cols:
+            ws.cell(r, i).number_format = "#,##0.00"
+        label = ws.cell(r, 1).value
+        if label == "MAIN (all payments)":
+            for c in range(1, ws.max_column + 1):
+                ws.cell(r, c).font = Font(bold=True)
+        elif label == "Unmatched (no category)":
+            for c in range(1, ws.max_column + 1):
+                ws.cell(r, c).font = Font(color="C00000")
+shutil.copy(xpath, f"{vroot}/output/ControlSheet.xlsx")
+print(f"CSV + formatted Excel → {vroot}/output/")
 display(spark.table(f"{fqn}.cs_population_recon"))

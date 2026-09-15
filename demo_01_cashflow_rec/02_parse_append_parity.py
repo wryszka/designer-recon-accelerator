@@ -11,7 +11,8 @@
 # MAGIC 3. append **`Jul_Current`** / **`Jul_Control`**  — *(1–3 = exactly what the Designer canvas produces)*,
 # MAGIC 4. **demo-only QA:** check it matches the synthetic benchmark to the penny (there is **no benchmark**
 # MAGIC    in a real deployment — this is scaffolding to prove our demo, never presented),
-# MAGIC 5. **standard export:** drop plain `.csv` + `.xlsx` into the folder — stock save, **no formatting code**.
+# MAGIC 5. **formatted export (hidden setup, never shown):** a small set-once template (bold header, number
+# MAGIC    format, exceptions in red) drops `.csv` + `.xlsx` into the folder — reused, not bespoke per-rec code.
 
 # COMMAND ----------
 
@@ -62,14 +63,28 @@ assert mism == 0 and status_mism == 0, "parity failed"
 
 # COMMAND ----------
 
-# ---- 5. standard export — stock CSV + Excel, NO formatting code to write or maintain ----
-# This is a plain "save as CSV / save as Excel", the same download any table gives you — not hand-styled
-# Python. In the room the analyst just downloads the Designer flow's output; here we drop both file types
-# into the folder as examples. Exception highlighting lives in the dashboard/Genie layer, not in code here.
+# ---- 5. formatted Excel out — a small reusable export template (HIDDEN setup; never shown in the room) ----
+# Bold header + number format + exceptions in red. Set-once and reused (like a saved Excel template,
+# automated) — NOT bespoke per-rec code, and never on the demo surface. Written locally first then copied
+# (Volumes FUSE has no random-access write for xlsx); CSV streams to the Volume directly.
+from openpyxl.styles import Font, PatternFill
 os.makedirs(f"{vroot}/output", exist_ok=True)
 out.to_csv(f"{vroot}/output/CashFlowRec_{period}.csv", index=False)
-# stock to_excel, no styling; write local first then copy (Volumes FUSE has no random-access write for xlsx)
-_t = tempfile.mkdtemp(); out.to_excel(f"{_t}/o.xlsx", index=False); shutil.copy(f"{_t}/o.xlsx", f"{vroot}/output/CashFlowRec_{period}.xlsx")
+_t = tempfile.mkdtemp(); xpath = f"{_t}/o.xlsx"
+with pd.ExcelWriter(xpath, engine="openpyxl") as xw:
+    out.to_excel(xw, index=False, sheet_name="CashFlowRec")
+    ws = xw.sheets["CashFlowRec"]
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF"); cell.fill = PatternFill("solid", fgColor="1B3A4B")
+    num_cols = [i + 1 for i, c in enumerate(out.columns) if c.endswith("_Current") or c.endswith("_Control")]
+    st_col = out.columns.get_loc(C_ST) + 1
+    for r in range(2, ws.max_row + 1):
+        for i in num_cols:
+            ws.cell(r, i).number_format = "#,##0.00"
+        if ws.cell(r, st_col).value == "Exception":
+            for c in range(1, ws.max_column + 1):
+                ws.cell(r, c).font = Font(color="C00000", bold=True)
+shutil.copy(xpath, f"{vroot}/output/CashFlowRec_{period}.xlsx")
 
 recon = int((out[C_ST] == "Reconciled").sum())
 print(f"CSV + Excel → {vroot}/output/  ·  {recon}/{len(out)} reconciled, {len(out)-recon} exception(s)")

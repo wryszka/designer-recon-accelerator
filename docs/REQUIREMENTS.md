@@ -124,6 +124,22 @@ presentation/framing, not an unbuilt hole.** Folded into the runbook:
 - Minor reassurance beats: friendly column labels in plain-English steps, exception-is-a-win framing, "you
   never open the Python" for UC3, provenance pulled forward to the moment the table appears.
 
+## No-code restructure + narrative arc — 2026-09-15 (later)
+Two further reworks after the persona pass, both to protect a hostile no-code room:
+- **The runbook is now a 100% no-code presenter surface.** Every asset opens as a spreadsheet **grid**, an
+  **Excel file**, or the **visual canvas** — **no notebook/GitHub/`.py` links, no SQL, no `</> Code`, no CLI**
+  anywhere in the doc. All code (notebooks, the coded parity receipts, rebuild commands, engineer-only
+  `</> Code` note) moved to a **separate `docs/SETUP.md` never opened in the room**. Root cause it fixes: the
+  old runbook linked the `.py` notebooks, so clicking "prove it" hit a wall of Python.
+- **Excel export: killed the 25-line bespoke styling, then restored a *lean, reusable* formatter that lives
+  ONLY in hidden setup** (bold header, number format, exceptions/Unmatched highlighted). So **U1.6 "formatted
+  Excel out" is still ✅** (formatting is automatic, kills the Format-Painter step) **and** there's no code on
+  the demo surface and nothing bespoke to maintain ("it's the platform's standard export template, set once").
+- The benchmark-parity check is **demo-only QA** (no benchmark in production) — held backstage, never shown.
+- **Narrative arc** (session spine): **① your process today, on Databricks → ② smoother (Auto Loader) → ③
+  what you can't do today (governance / sharing / versioning + previous runs)**. UC1 walks the full arc;
+  governance is surfaced as **grids + a Genie question**, never a notebook. All U/C lines still ✅.
+
 *How to use this:* each review round, walk the current demo against every line above from each of the
 review personas, mark ✅/🟡/⚠️, and fold the fixes back into the build + runbook. Keep this file the
 single source of truth for "what the client actually asked for."
