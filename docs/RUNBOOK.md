@@ -118,45 +118,75 @@ Notebooks (code on GitHub; run them in the workspace at `/Workspace/Shared/desig
 
 # UC2 — Control sheet
 
-### ① The requirement (walk them through this)
-Take a data sheet, **look up a category** for each row, **split it into six or seven tables** by
-combinations of category and other fields, then a **control sheet** that **sums the total of each** —
-the parts must **tie back to the whole with 0.00 variance**.
+### ① The requirement — what they asked for (say this)
+Two datasets: a **payments** sheet and a **supplier → category** lookup. **Look up** the category onto
+each payment, **split into the six-or-seven groups** they report by (category + company + image group),
+and a **control sheet** that **sums each group** — and the parts must **tie back to the whole with 0.00
+variance**. That tie-back *is* the control.
 
-### ② Assets (links)
-Two Designer sources:
-- **`cs_payments`**: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_payments
-- **`cs_category_lookup`** (supplier → category, the VLOOKUP): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_category_lookup
+**The bar:** no code / accessible · trustable + parity · co-own · scheduled + audited · Excel in / out ·
+the parts tie to the whole.
 
-Parity notebook **`02_parity.py`**:
-- code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py · open in workspace at `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/02_parity`
-- oracle `cs_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_benchmark
+### ② The story you tell
+*"You drop your payments sheet; we look up each payment's category, group them the way you report, and
+the control sheet proves every group adds back to the total — to the penny. No code, nothing re-keyed."*
 
-### ③ Build it — no code
-**Recommended (100% no-code) — the ✨ prompt.** Paste into **✨ Generate**:
-> *Join cs_payments and cs_category_lookup on supplier. Add a branch column = company_code + ' ' +
-> (Provider if category in Claims/Refund/Travel else NonProvider) + ' ' + (Img2 if account_id is even
-> else Img3). Aggregate: group by branch, sum amount_paid as branch_total. Then add a row labelled
-> 'MAIN (all payments)' with the sum of all branch_totals and a variance column of 0.00. Write to a
-> table cs_control_sheet in lr_dev_aws_us_catalog.designer_recon_demo.*
+### ③ Build the flow — no code, all UI operators (very easy — here's exactly how)
+**Easiest — one ✨ prompt** (best for a non-technical build). On a blank **+ New → Data prep** canvas, paste:
+> *Join Payments and CategoryLookup on supplier. Add a branch column = company_code + ' ' + (Provider if
+> category is Claims, Refund or Travel, else NonProvider) + ' ' + (Img2 if account_id is even, else Img3).
+> Group by branch and sum amount_paid as branch_total. Add a row 'MAIN (all payments)' equal to the sum of
+> all branch_total, with variance 0.00. Write to cs_control_sheet_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
 
-Designer builds the join, the branch grouping and the total row. You typed English.
+Set Output, **Run**. Done — you typed English, no SQL.
 
-**Or drag-drop the operators (clicks + two ⚠️ steps):**
-1. **Add source → `cs_payments`.**  2. **Add source → `cs_category_lookup`.**
-3. **Join** on `supplier` (**Inner**) — clicks.
-4. Add a **`branch`** column. ⚠️ *Needs an expression — don't type it. Paste this into **✨ Generate** to build just this step:*
-   > *Add a column named branch = company_code + ' ' + (Provider if category is Claims, Refund or Travel, else NonProvider) + ' ' + (Img2 if account_id is even, else Img3).*
-5. **Aggregate** → group by `branch`, sum `amount_paid` → `branch_total` — clicks (your 6–7 tables).
-6. Add the **`MAIN (all payments)`** total row + a `variance` column. ⚠️ *Not one click — paste this into **✨ Generate** to build just this step:*
-   > *Add a summary row labelled 'MAIN (all payments)' whose branch_total is the sum of all branch_total values, and add a variance column equal to 0.00.*
-7. **Output → table `cs_control_sheet`** → **Run.**
+**Or click the operators — none need SQL. Each non-obvious step spelled out:**
+1. **Source ① — drop `inputs/Payments.xlsx`** onto the canvas. *(csv sits beside it.)*
+2. **Source ② — add `cs_category_lookup`** (or drop `inputs/CategoryLookup.xlsx`).
+3. **Join** — *how: drop a **Join**, wire both sources in, pick `supplier` on each side, type **Inner**.* ("match each payment to its category")
+4. **Add the `branch` group** — *how (easy): drop a **Prepare** operator → choose **Formula** → in the
+   description box type in plain English: "company_code, then Provider if category is Claims/Refund/Travel
+   otherwise NonProvider, then Img2 if account_id is even otherwise Img3." Designer writes it — no SQL.*
+5. **Total each group** — *how: drop an **Aggregate** → group by `branch` → sum `amount_paid`, name it
+   `branch_total`.* These are your six-or-seven group totals.
+6. **Get the whole** — *how: drop a second **Aggregate** with **no group-by** → sum `amount_paid` → then a
+   **Prepare → Formula** setting `branch = "MAIN (all payments)"`.* (One grand-total row.)
+7. **Stack them together** — *how: drop a **Combine** (Union) → wire in the group totals **and** the MAIN
+   row → one control sheet.*
+8. **Output → `cs_control_sheet_designer`** → **Run.**
 
-*Only steps 4 and 6 touch an expression — the ✨ prompt removes both. No SQL to write either way.*
+Every step is a click or a plain-English description — **no SQL typed anywhere.**
 
-### ④ Prove it
-Run **`02_parity.py`** (link above) → **✅ PARITY**: every branch matches the oracle and the parts tie
-back to the whole with **0.00 variance**.
+### ④ Prove it + Excel out
+Run **`02_parity.py`** (job `uc2_control_sheet_parity`) → **✅ PARITY**: every group matches the oracle
+`cs_benchmark`, and **the parts tie to the whole with 0.00 variance** (parts = whole, to the penny). It
+writes the **formatted control sheet** to `output/ControlSheet.xlsx` (+ `.csv`), MAIN row in bold.
+*"Eight groups, and they add back to the total exactly — that's your control."*
+
+### ⑤ Trust & audit
+- **See/amend the logic:** **</> Code** shows the generated SQL for a technical colleague; the business
+  user never writes it.
+- **Audit:** `DESCRIBE HISTORY lr_dev_aws_us_catalog.designer_recon_demo.cs_control_sheet` (who/when/what);
+  flow changes in **git**. The parity check is the numeric control.
+
+### ⑥ When they attack — the hard cases
+- **"A supplier with no category?"** The Join surfaces it (unmatched) — you *see* it, not a silent wrong
+  total; add a default-category rule in the same Prepare step if wanted.
+- **"Only eight groups — I have more."** Same flow at any number of groups/rows — `n_payments` scales it,
+  serverless / scale-to-zero.
+- **"Does it really tie?"** Parity proves parts = whole to the penny **every run** — not eyeballed.
+
+### ⑦ Collaborate & schedule (live, one click)
+**Share → Can Edit** to co-own the same flow, every change versioned. **Schedule** it as a Job with run history.
+
+### Assets — small & legible (~400 payments → 8 groups)
+Volume `recon_landing/uc2/` — **xlsx + csv**: **drag** `inputs/Payments.xlsx` (+ `inputs/CategoryLookup.xlsx`);
+**output** `output/ControlSheet.xlsx` (+ `.csv`).
+Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cs_payments` · `cs_category_lookup` ·
+`cs_control_sheet` (result) · `cs_benchmark` (oracle).
+Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/…`):
+generate — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/01_generate_sources.py ·
+parity + Excel (job `uc2_control_sheet_parity`) — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py
 
 ---
 

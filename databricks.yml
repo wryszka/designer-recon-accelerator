@@ -106,7 +106,7 @@ resources:
             client: "3"
 
     generate_control_sheet:
-      name: "[recon-accel] generate control-sheet sources"
+      name: "[recon-accel] UC2 generate control-sheet sources"
       tasks:
         - task_key: generate
           notebook_task:
@@ -114,6 +114,23 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
+    uc2_control_sheet_parity:
+      name: "[recon-accel] UC2 build control sheet → parity → formatted Excel"
+      tasks:
+        - task_key: parity
+          notebook_task:
+            notebook_path: ./demo_02_control_sheet/02_parity.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
           environment_key: serverless
       environments:
         - environment_key: serverless

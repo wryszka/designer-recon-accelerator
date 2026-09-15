@@ -55,6 +55,19 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 - **U2.4** The **parts tie back to the whole** (0.00 variance) — that reconciliation *is* the control.
 - Plus **C1–C5**.
 
+**UC2 score — 2026-09-15: ✅ 100% (shown/proven on dev):**
+| Req | ✅ where it's answered |
+|---|---|
+| U2.1 category lookup | **Join** Payments ↔ CategoryLookup on `supplier` |
+| U2.2 split into ~6–7 groups | **Prepare/Formula** `branch` → **Aggregate** = 8 group totals |
+| U2.3 summary sums each | the control sheet totals each group + a **MAIN** row |
+| U2.4 parts tie to whole 0.00 | parity: parts = whole to the penny (−322,536.31), variance 0 |
+| C1 no-code | Join / Prepare / Aggregate / Combine — UI operators, no SQL |
+| C2 trustable | code pane + parity |
+| C3 collaborate | Share → Can Edit |
+| C4 scheduled + audited | Job schedule + run history; `DESCRIBE HISTORY` + git |
+| C5 Excel in / out | Payments/CategoryLookup xlsx+csv in; formatted ControlSheet xlsx+csv out |
+
 ---
 
 ## UC3 — Scheduled automation (two Python scripts; **NOT Designer** — that's the point)
