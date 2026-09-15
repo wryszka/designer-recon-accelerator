@@ -28,67 +28,75 @@ Jobs (that's the point of UC3).**
 
 # UC1 — Cash-flow reconciliation  *(the hero, ~half the session)*
 
-### ① The requirement (walk them through this)
-Every month, across ~20 bank accounts, someone opens each account's **bank-rec Excel workbook**, reads
-a few summary cells off its header (SAP / Accurate / Bank / Control), and **appends two new columns** —
-this period's *Current* and *Control* — onto one **rolling Excel file** that carries a column-pair per
-month across the year. If a workbook is missing, they **fall back** to two cells from separate SAP and
-Bank folders. Output must be a **formatted Excel**. Today it's an awkward five-input Alteryx build (the
-tool can't hold a variable for the moving column position) and the formatting is a manual
-template + Format-Painter copy.
+### ① The requirement — what they asked for (say this to walk them through it)
+A **monthly** job across their bank accounts. Each account has a **bank-rec workbook** in a folder;
+someone reads a few summary cells off its header (**SAP / Accurate / Bank / Control**) and **appends two
+new columns** — this period's **Current** and **Control** — onto last month's **rolling** file (one
+column-pair per month; 12 months, then a new financial year). If a workbook is **missing**, they fall
+back to two cells from a separate SAP/Bank folder. Output must be a **formatted Excel**. Today it's an
+ugly five-input Alteryx build (the tool can't hold a variable for the moving column position) and the
+"format" is a manual Format-Painter copy.
 
-### ② Assets (links)
-**Bank files land here:** the folder **`recon_landing/uc1/bank_recs/`** (one workbook per account) —
-browse from the Volume link at the top → `uc1` → `bank_recs`.
+**The bar they'll judge on:** no code / accessible · trustable (see & change the logic) · a colleague can
+co-own it · scheduled + audited · handles the missing workbook · **each account nets to zero** with
+exceptions flagged · formatted Excel out.
 
-**Autoloader ingest** `00_ingest_autoloader.py` (watches that folder → writes `cf_period_extract`):
-https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/00_ingest_autoloader.py
-— run it as job **`uc1_ingest_autoloader`**, or open in the workspace at
-`/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/00_ingest_autoloader`.
+### ② The story you tell while building (keep Autoloader quiet)
+*"You drop your rolling cash-flow file — the one you carry forward. This month's account numbers are
+already waiting as a table. We join them, reconcile, and hand you back a formatted Excel. No code,
+nothing re-keyed."* Keep it familiar — **you drop a file**, like today. (Where this month's numbers came
+from is ⑤ — mention only if asked; don't lead with "we automated your folders.")
 
-The two Designer sources:
-- **`cf_prior_rec`** — last month's rolling file; **this is the Excel you drag** (see ③): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_prior_rec
-- **`cf_period_extract`** — this month's numbers, **produced by the Autoloader ingest**: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract
-
-Excel files in `recon_landing/uc1/`: **the ONE you drag → `prior/CashFlowRec_2026-06.xlsx`** · bank drops
-→ `bank_recs/` · **formatted output → `output/CashFlowRec_2026-07.xlsx`**.
-
-Parity notebook **`02_parse_append_parity.py`** (proves it + writes the Excel) — code:
-https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/02_parse_append_parity.py
-· open in workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/02_parse_append_parity`
-· oracle `cf_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_benchmark
-
-### ③ Build it — the story, no code
-
-**Part 1 — files land + Autoloader ingests (the automatic bit — say this).** The bank drops each
-account's workbook into **`recon_landing/uc1/bank_recs/`**. **Autoloader** picks up every new file the
-moment it lands and reads its header cells into **`cf_period_extract`** — this month's numbers, one row
-per account — with nobody re-keying or moving a file. *(Missing workbook → a 2-cell fallback covers it.)*
-Run it via job **`uc1_ingest_autoloader`** (or notebook `00_ingest_autoloader.py`, link above).
-
-**Part 2 — the Designer flow (no code).** Recommended — the **✨ prompt** on a blank **+ New → Data prep**
-canvas:
-> *Join cf_prior_rec to cf_period_extract on account_code, keeping all rows from cf_prior_rec. Add two
-> new columns: Jul_Current from cf_period_extract.current_period, and Jul_Control from
-> cf_period_extract.period_control. Keep every existing column of cf_prior_rec. Write to a table
+### ③ Build the flow — visual, no code (7 boxes, so it reads as real work)
+**Fastest — recreate it with one plain-English prompt** (uses the tables). On a blank **+ New → Data
+prep** canvas, paste into **✨ Generate**:
+> *Join cf_prior_rec to cf_period_extract on account_code, keeping all rows from cf_prior_rec. Add a
+> column Jul_Status = Reconciled when period_control is 0, otherwise Exception. Add Jul_Current from
+> current_period and Jul_Control from period_control. Sort so Exception rows are on top. Write to
 > cf_cashflow_rec_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
 
-Set the Output table, **Run**. **Or drag-drop:**
-1. **Drag ONE Excel onto the canvas → `recon_landing/uc1/prior/CashFlowRec_2026-06.xlsx`** (the rolling
-   file). Designer reads it — this is source ① (same data as `cf_prior_rec`). *This is the only file you drag.*
-2. **Add source → `cf_period_extract`** — the table Autoloader just produced → source ②.
-3. **Join** → **type Left**, primary = the rolling file, key `account_code`. *(Pick type + key — clicks.)*
-4. Name this period's two values **`Jul_Current`** and **`Jul_Control`**. ⚠️ *Renaming is an expression
-   step — don't type it. Paste into **✨ Generate**:*
-   > *Rename current_period to Jul_Current and period_control to Jul_Control; drop the source column; keep all other columns.*
-5. **Output → table `cf_cashflow_rec_designer`** → **Run.**
+**Or build it by hand — every step visual, no SQL:**
+1. **Source ① — drop the Excel:** drag **`rolling/CashFlowRec_2026-06.xlsx`** onto the canvas (the ONE
+   file). It becomes the rolling source. *(csv version is right beside it if you'd rather drop csv.)*
+2. **Source ② — add the table `cf_period_extract`** (this month's numbers).
+3. **Join** — key `account_code`, type **Left** (keep every account). *(clicks)*
+4. **Reconciliation status** — add a **`Jul_Status`** column: *Reconciled* when Control = 0, else
+   *Exception*. ⚠️ expression step → paste into **✨ Generate**:
+   > *Add a column Jul_Status = Reconciled when period_control is 0, otherwise Exception.*
+5. **Rename** the two new values to **`Jul_Current`** / **`Jul_Control`**. ⚠️ expression → paste:
+   > *Rename current_period to Jul_Current and period_control to Jul_Control; drop the source column.*
+6. **Sort** — Exception rows to the top (so the breaks are obvious). *(clicks)*
+7. **Output → `cf_cashflow_rec_designer`** → **Run.**
+
+Seven visible boxes, **zero SQL on screen**; the only expression steps (4 and 5) are done with the
+plain-English prompts above.
 
 ### ④ Prove it + Excel out
-- Run **`02_parse_append_parity.py`** (link above) → **✅ PARITY to the penny** vs `cf_benchmark`.
-- Open **`recon_landing/uc1/output/CashFlowRec_2026-07.xlsx`** — *"the report, formatted, no Format Painter."*
+- Run **`02_parse_append_parity.py`** → **✅ PARITY to the penny** vs `cf_benchmark`, and it writes the
+  **formatted Excel** to `output/CashFlowRec_2026-07.xlsx` (+ `.csv`). **5 of 6 accounts reconciled, 1
+  exception (ACC-003)** — the exception shows in red.
+- *"Each account nets to zero on the Control column; the one that doesn't is flagged."* **That is the reconciliation.**
 - **Trust beat (optional):** toggle **</> Code** to show the generated SQL *exists* for a technical
-  colleague to review/amend — the business user never writes it. **Lineage / Schedule / Share → Can Edit**
-  on `cf_cashflow_rec_designer`.
+  colleague to review — the business user never writes it. **Lineage / Schedule / Share → Can Edit.**
+
+### ⑤ Only if they ask — where did this month's numbers come from?
+*"Your account workbooks land in a folder like they do today; the platform quietly read them into that
+table — you didn't open the workbooks or re-key anything. Same habit, less grind."* That's **Autoloader**
+(job `uc1_ingest_autoloader`) — kept, but never the headline.
+
+### Assets — kept deliberately small (6 accounts; scale up if they ask)
+Volume `recon_landing/uc1/` — a few examples, **xlsx and csv**:
+- **drag this →** `rolling/CashFlowRec_2026-06.xlsx` (also `.csv`)
+- account workbooks (5) → `bank_recs/` · the missing-account fallback → `fallback/`
+- **formatted output →** `output/CashFlowRec_2026-07.xlsx` (also `.csv`)
+
+Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cf_prior_rec` (rolling) ·
+`cf_period_extract` (this month) · `cf_cashflow_rec` (result) · `cf_benchmark` (oracle).
+
+Notebooks (code on GitHub; run them in the workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/…`):
+- generate: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/01_generate_sources.py
+- Autoloader ingest (job `uc1_ingest_autoloader`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/00_ingest_autoloader.py
+- parity + Excel (job `uc1_parse_append_parity`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/02_parse_append_parity.py
 
 ---
 

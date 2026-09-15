@@ -8,7 +8,7 @@
 # MAGIC month's numbers, one row per account. That table is then a source for the Designer flow.
 # MAGIC
 # MAGIC - **Landing folder (bank drops here):** `…/recon_landing/uc1/bank_recs/`
-# MAGIC - **Fallback (workbook missing):** `…/uc1/sap_fallback/` + `…/uc1/bank_fallback/`
+# MAGIC - **Fallback (workbook missing):** `…/uc1/fallback/` (`SAP_*.csv` + `Bank_*.csv`)
 # MAGIC - **Produces:** `cf_period_extract`  ·  **Also lands:** `cf_bank_files_bronze` (what Autoloader saw)
 
 # COMMAND ----------
@@ -75,9 +75,9 @@ for r in spark.table(f"{fqn}.cf_bank_files_bronze").select("path", "content").co
 
 # fallback: 2 cells (SAP + Bank) for accounts whose workbook never landed
 sap_fb = {os.path.basename(p).replace("SAP_", "").replace(f"_{period}.csv", ""): pd.read_csv(p)["SAP"][0]
-          for p in glob.glob(f"{vroot}/sap_fallback/SAP_*_{period}.csv")}
+          for p in glob.glob(f"{vroot}/fallback/SAP_*_{period}.csv")}
 bank_fb = {os.path.basename(p).replace("Bank_", "").replace(f"_{period}.csv", ""): pd.read_csv(p)["Bank"][0]
-           for p in glob.glob(f"{vroot}/bank_fallback/Bank_*_{period}.csv")}
+           for p in glob.glob(f"{vroot}/fallback/Bank_*_{period}.csv")}
 for code in sorted(sap_fb):
     rows.append({"account_code": code, "current_period": round(float(bank_fb[code]), 2),
                  "period_control": round(float(sap_fb[code]) - float(bank_fb[code]), 2), "source": "fallback"})
