@@ -128,65 +128,74 @@ variance**. That tie-back *is* the control.
 the parts tie to the whole.
 
 ### ② The story you tell
-*"You drop your payments sheet; we look up each payment's category, group them the way you report, and
-the control sheet proves every group adds back to the total — to the penny. No code, nothing re-keyed."*
+*"You drop your payments sheet and your category list; we look up each payment's category, group them the
+way you report, and prove **every single payment** is accounted for and the groups add back to the total — to
+the penny. Even a payment whose supplier isn't in the category list shows up as its own **Unmatched** group,
+so the total is always the true whole. No code, nothing re-keyed."*
 
 ### ③ Build the flow — no code, all UI operators (very easy — here's exactly how)
 **Easiest — one ✨ prompt** (best for a non-technical build). On a blank **+ New → Data prep** canvas, paste:
-> *Join Payments and CategoryLookup on supplier. Add a branch column = company_code + ' ' + (Provider if
-> category is Claims, Refund or Travel, else NonProvider) + ' ' + (Img2 if account_id is even, else Img3).
-> Group by branch and sum amount_paid as branch_total. Add a row 'MAIN (all payments)' equal to the sum of
-> all branch_total, with variance 0.00. Write to cs_control_sheet_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
+> *Join Payments to CategoryLookup on supplier, keeping every payment (left join). Add a branch column: if
+> there's no category call it "Unmatched (no category)", otherwise company_code + ' ' + (Provider if category
+> is Claims, Refund or Travel else NonProvider) + ' ' + (Img2 if account_id is even else Img3). Group by branch
+> and sum amount_paid as branch_total. Write to cs_control_sheet_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
 
-Set Output, **Run**. Done — you typed English, no SQL.
+Set Output, **Run**. Done — you typed English, no SQL. *(The grand total + tie-check is ④, so the canvas stays simple.)*
 
-**Or click the operators — none need SQL. Each non-obvious step spelled out:**
-1. **Source ① — drop `inputs/Payments.xlsx`** onto the canvas. *(csv sits beside it.)*
-2. **Source ② — add `cs_category_lookup`** (or drop `inputs/CategoryLookup.xlsx`).
-3. **Join** — *how: drop a **Join**, wire both sources in, pick `supplier` on each side, type **Inner**.* ("match each payment to its category")
-4. **Add the `branch` group** — *how (easy): drop a **Prepare** operator → choose **Formula** → in the
-   description box type in plain English: "company_code, then Provider if category is Claims/Refund/Travel
-   otherwise NonProvider, then Img2 if account_id is even otherwise Img3." Designer writes it — no SQL.*
-5. **Total each group** — *how: drop an **Aggregate** → group by `branch` → sum `amount_paid`, name it
-   `branch_total`.* These are your six-or-seven group totals.
-6. **Get the whole** — *how: drop a second **Aggregate** with **no group-by** → sum `amount_paid` → then a
-   **Prepare → Formula** setting `branch = "MAIN (all payments)"`.* (One grand-total row.)
-7. **Stack them together** — *how: drop a **Combine** (Union) → wire in the group totals **and** the MAIN
-   row → one control sheet.*
-8. **Output → `cs_control_sheet_designer`** → **Run.**
+**Or click the operators — five boxes, none need SQL:**
+1. **Source ① — drop `inputs/Payments.xlsx`.**  2. **Source ② — drop `inputs/CategoryLookup.xlsx`.** *(both files; csv beside each.)*
+3. **Join** — *how: drop a **Join**, wire both in, pick `supplier` on each side, choose **Left join** — "keep
+   every payment; never drop one just because its category is missing."*
+4. **Add the `branch` group** — *how (easy): drop a **Prepare** operator → **Formula** → type in plain English:
+   "if category is empty, 'Unmatched (no category)', else company_code then Provider if category is
+   Claims/Refund/Travel else NonProvider then Img2 if account_id is even else Img3." Designer writes it — no SQL.*
+5. **Total each group** — *how: drop an **Aggregate** → group by `branch` → sum `amount_paid` → `branch_total`.*
+6. **Output → `cs_control_sheet_designer`** → **Run.**
 
-Every step is a click or a plain-English description — **no SQL typed anywhere.**
+Five boxes, each a click or a plain-English line — **no SQL.** The grand total and the tie-back are the
+**check** in ④, so you never hand-build a total row that could drift.
 
-### ④ Prove it + Excel out
-Run **`02_parity.py`** (job `uc2_control_sheet_parity`) → **✅ PARITY**: every group matches the oracle
-`cs_benchmark`, and **the parts tie to the whole with 0.00 variance** (parts = whole, to the penny). It
-writes the **formatted control sheet** to `output/ControlSheet.xlsx` (+ `.csv`), MAIN row in bold.
-*"Eight groups, and they add back to the total exactly — that's your control."*
+### ④ Prove it — population reconciliation + Excel out (the beat that wins the room)
+Run **`02_parity.py`** (job `uc2_control_sheet_parity`). It doesn't just flash "0.00" — it proves the total is
+the **whole population**:
+- **Every payment accounted for:** `400 in = 392 matched + 8 unmatched` — **0 dropped**.
+- **No double-counting:** rows after the join = 400; **0 duplicate suppliers** in the lookup — **0 fan-out**.
+- **Groups sum to all payments:** Σ groups = Σ all = **−322,322.44**, **variance 0.00** — including the Unmatched group.
+- Writes the **formatted control sheet** to `output/ControlSheet.xlsx` (+ `.csv`): **Unmatched in red, MAIN in bold**.
+
+*"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total — is
+exactly what this reconciles. Nothing hides behind a green 0.00."* (See table `cs_population_recon`.)
 
 ### ⑤ Trust & audit
-- **See/amend the logic:** **</> Code** shows the generated SQL for a technical colleague; the business
-  user never writes it.
-- **Audit:** `DESCRIBE HISTORY lr_dev_aws_us_catalog.designer_recon_demo.cs_control_sheet` (who/when/what);
-  flow changes in **git**. The parity check is the numeric control.
+- **Lineage drill-through (Excel can't):** in Catalog Explorer, trace a group total → the aggregate → the join
+  → the actual payment rows. Click a number, see the payments behind it.
+- **The check is a gate, not decoration:** the population/parity assert **fails the run** if the control ever
+  breaks — it can't silently go wrong.
+- **See/amend logic:** **</> Code**; **audit:** `DESCRIBE HISTORY … cs_control_sheet` (who/when/what) + git.
 
-### ⑥ When they attack — the hard cases
-- **"A supplier with no category?"** The Join surfaces it (unmatched) — you *see* it, not a silent wrong
-  total; add a default-category rule in the same Prepare step if wanted.
-- **"Only eight groups — I have more."** Same flow at any number of groups/rows — `n_payments` scales it,
+### ⑥ When they attack — the hard cases (proven, not promised)
+- **"Supplier not in the lookup?"** Shown live: **8** such payments land in the **Unmatched** group and stay in
+  the total (`cs_population_recon`: 392 + 8 = 400). Not dropped, not hidden.
+- **"Duplicate-supplier fan-out / double-count?"** The recon asserts **rows-after-join = rows-in** and **0
+  duplicate suppliers** — a fan-out fails the run.
+- **"Eight groups isn't my dozens / millions of rows."** Same flow at any scale — `n_payments` bumps it,
   serverless / scale-to-zero.
-- **"Does it really tie?"** Parity proves parts = whole to the penny **every run** — not eyeballed.
+- **"Your parity marks its own homework."** Fair — that's the internal check; the **population reconciliation**
+  is the correctness check, and we'll **tie it to your exported control total, on your file**, live.
 
-### ⑦ Collaborate & schedule (live, one click)
-**Share → Can Edit** to co-own the same flow, every change versioned. **Schedule** it as a Job with run history.
+### ⑦ Collaborate, schedule & reuse (live)
+- **Share → Can Edit** — co-own the same flow, versioned. **Schedule** it as a Job with run history.
+- **One definition, everywhere:** point **Genie** or an **AI/BI dashboard** at `cs_control_sheet` — ask "Provider
+  groups over time" in plain English, off the same governed numbers (the wider-platform / next-session tail).
 
-### Assets — small & legible (~400 payments → 8 groups)
-Volume `recon_landing/uc2/` — **xlsx + csv**: **drag** `inputs/Payments.xlsx` (+ `inputs/CategoryLookup.xlsx`);
+### Assets — small & legible (~400 payments → 8 groups + Unmatched)
+Volume `recon_landing/uc2/` — **xlsx + csv**: **drag** `inputs/Payments.xlsx` **and** `inputs/CategoryLookup.xlsx`;
 **output** `output/ControlSheet.xlsx` (+ `.csv`).
 Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cs_payments` · `cs_category_lookup` ·
-`cs_control_sheet` (result) · `cs_benchmark` (oracle).
+`cs_control_sheet` (result) · `cs_benchmark` (oracle) · `cs_population_recon` (rows in = grouped, 0 dropped/dup).
 Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/…`):
 generate — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/01_generate_sources.py ·
-parity + Excel (job `uc2_control_sheet_parity`) — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py
+parity + recon + Excel (job `uc2_control_sheet_parity`) — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py
 
 ---
 

@@ -61,12 +61,13 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 | U2.1 category lookup | **Join** Payments ↔ CategoryLookup on `supplier` |
 | U2.2 split into ~6–7 groups | **Prepare/Formula** `branch` → **Aggregate** = 8 group totals |
 | U2.3 summary sums each | the control sheet totals each group + a **MAIN** row |
-| U2.4 parts tie to whole 0.00 | parity: parts = whole to the penny (−322,536.31), variance 0 |
-| C1 no-code | Join / Prepare / Aggregate / Combine — UI operators, no SQL |
-| C2 trustable | code pane + parity |
+| U2.4 parts tie to whole 0.00 | **population reconciliation**: 400 in = 392 matched + 8 unmatched (0 dropped), 0 dup suppliers (0 fan-out), Σgroups = Σall = −322,322.44, variance 0 |
+| C1 no-code | Join / Prepare-Formula / Aggregate — UI operators, no SQL (5 boxes) |
+| C2 trustable | code pane + parity + lineage drill-through |
 | C3 collaborate | Share → Can Edit |
-| C4 scheduled + audited | Job schedule + run history; `DESCRIBE HISTORY` + git |
+| C4 scheduled + audited | Job schedule + run history; `cs_population_recon` + `DESCRIBE HISTORY` + git |
 | C5 Excel in / out | Payments/CategoryLookup xlsx+csv in; formatted ControlSheet xlsx+csv out |
+| *hostile hardening* | LEFT join (nothing dropped) + visible **Unmatched** group; drop/fan-out attacks fail the run; tie-to-your-file offer |
 
 ---
 

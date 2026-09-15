@@ -55,7 +55,8 @@ n_suppliers = 30
 suppliers = [f"SUP-{i:04d}" for i in range(1, n_suppliers + 1)]
 lookup = pd.DataFrame({"supplier": suppliers, "category": rng.choice(CATEGORIES, size=n_suppliers)})
 
-sup = rng.choice(suppliers, size=n)
+sup = rng.choice(suppliers, size=n).astype(object)
+sup[rng.choice(n, size=8, replace=False)] = "SUP-9999"             # a supplier NOT in the lookup → must show as an Unmatched group, never silently dropped
 pay = pd.DataFrame({
     "payment_doc_no": np.arange(1900000000, 1900000000 + n),
     "payment_date": (pd.to_datetime("2026-06-01") + pd.to_timedelta(rng.integers(0, 90, n), unit="D")).astype(str).str.slice(0, 10),
@@ -66,15 +67,15 @@ pay = pd.DataFrame({
     "account_id": rng.integers(1888000000, 1888000100, n),
     "house_bank": rng.choice(HOUSE_BANKS, size=n),
     "payment_method": rng.choice(PAYMENT_METHODS, size=n),
-    "payee_name": [f"Payee {s[-4:]}" for s in sup],
+    "payee_name": [f"Payee {str(s)[-4:]}" for s in sup],
 })
 
-# branch key = company + provider-flag (by category) + image group (by account) → ~6-8 groups
+# branch = company + provider-flag + image group; unmatched suppliers get their OWN visible group
 cat_of = dict(zip(lookup.supplier, lookup.category))
-cat = pd.Series(sup).map(cat_of).values
-provider = np.where(np.isin(cat, ["Claims", "Refund", "Travel"]), "Provider", "NonProvider")
+cat = pd.Series(sup).map(cat_of)                                   # NaN where supplier not in the lookup
+provider = np.where(cat.isin(["Claims", "Refund", "Travel"]), "Provider", "NonProvider")
 img = np.where((pay["account_id"] % 2) == 0, "Img2", "Img3")
-branch = pay["company_code"] + " " + provider + " " + img
+branch = np.where(cat.isna(), "Unmatched (no category)", pay["company_code"] + " " + provider + " " + img)
 
 branch_tot = pay.assign(branch=branch).groupby("branch", as_index=False)["amount_paid"].sum().round(2)
 branch_tot.columns = ["branch", "branch_total"]; branch_tot["variance"] = 0.00
