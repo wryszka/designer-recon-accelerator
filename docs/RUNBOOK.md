@@ -16,7 +16,7 @@ wants to review it* — the business user never touches it.)
 
 **Everything opens from here:**
 - **Repo:** https://github.com/wryszka/designer-recon-accelerator
-- **Notebooks:** https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator
+- **Notebooks (code):** https://github.com/wryszka/designer-recon-accelerator — *to open/run, in the workspace go to `Workspace → Shared → designer-recon-accelerator`*
 - **All tables:** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo
 - **Files (Volume `recon_landing`):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing
 
@@ -42,8 +42,9 @@ template + Format-Painter copy.
 browse from the Volume link at the top → `uc1` → `bank_recs`.
 
 **Autoloader ingest** `00_ingest_autoloader.py` (watches that folder → writes `cf_period_extract`):
-https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/00_ingest_autoloader.py
-(job `uc1_ingest_autoloader`).
+https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/00_ingest_autoloader.py
+— run it as job **`uc1_ingest_autoloader`**, or open in the workspace at
+`/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/00_ingest_autoloader`.
 
 The two Designer sources:
 - **`cf_prior_rec`** — last month's rolling file; **this is the Excel you drag** (see ③): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_prior_rec
@@ -52,8 +53,9 @@ The two Designer sources:
 Excel files in `recon_landing/uc1/`: **the ONE you drag → `prior/CashFlowRec_2026-06.xlsx`** · bank drops
 → `bank_recs/` · **formatted output → `output/CashFlowRec_2026-07.xlsx`**.
 
-Parity notebook **`02_parse_append_parity.py`** (proves it + writes the Excel): open/run —
-https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/02_parse_append_parity.py
+Parity notebook **`02_parse_append_parity.py`** (proves it + writes the Excel) — code:
+https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/02_parse_append_parity.py
+· open in workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/02_parse_append_parity`
 · oracle `cf_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_benchmark
 
 ### ③ Build it — the story, no code
@@ -103,7 +105,7 @@ Two Designer sources:
 - **`cs_category_lookup`** (supplier → category, the VLOOKUP): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_category_lookup
 
 Parity notebook **`02_parity.py`**:
-- open/run: https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/02_parity.py
+- code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py · open in workspace at `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/02_parity`
 - oracle `cs_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_benchmark
 
 ### ③ Build it — no code
@@ -148,8 +150,8 @@ Their question: *can the platform schedule and log this like our scripts?* Answe
 + Autoloader + Unity Catalog audit.** No canvas here — that's why it isn't Designer.
 
 ### ② Assets (links)
-- **3a** `01_file_staging.py`: open/run — https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_03_automation/01_file_staging.py · tables `af_files_staged`, `af_staging_audit` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_staging_audit)
-- **3b** `02_fixedwidth_parser.py`: open/run — https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_03_automation/02_fixedwidth_parser.py · tables `fw_bdx_consolidated`, `fw_contra_log` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_contra_log)
+- **3a** — run as job **`automation_file_staging`**; code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/01_file_staging.py · tables `af_files_staged`, `af_staging_audit` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_staging_audit)
+- **3b** — run as job **`automation_bdx_parser`**; code: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/02_fixedwidth_parser.py · tables `fw_bdx_consolidated`, `fw_contra_log` (https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_contra_log)
 
 ### ③ Run it (~5 min, no build)
 Open each notebook (links) and **Run all**, or run jobs `automation_file_staging` / `automation_bdx_parser`.
