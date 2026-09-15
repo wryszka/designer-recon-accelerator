@@ -57,6 +57,22 @@ resources:
           spec:
             client: "3"
 
+    uc1_ingest_autoloader:
+      name: "[recon-accel] UC1 ingest bank workbooks (Autoloader) → cf_period_extract"
+      tasks:
+        - task_key: ingest
+          notebook_task:
+            notebook_path: ./demo_01_cashflow_rec/00_ingest_autoloader.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
     uc1_parse_append_parity:
       name: "[recon-accel] UC1 parse → append → parity → formatted Excel"
       tasks:

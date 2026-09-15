@@ -38,34 +38,46 @@ tool can't hold a variable for the moving column position) and the formatting is
 template + Format-Painter copy.
 
 ### ② Assets (links)
-Two Designer sources:
-- **`cf_prior_rec`** (last month's rolling file): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_prior_rec
-- **`cf_period_extract`** (this month's numbers per account): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract
+**Bank files land here:** the folder **`recon_landing/uc1/bank_recs/`** (one workbook per account) —
+browse from the Volume link at the top → `uc1` → `bank_recs`.
 
-Excel — Volume `recon_landing/uc1/`: `prior/CashFlowRec_2026-06.xlsx` (input) · `bank_recs/` (the 20
-workbooks) · **`output/CashFlowRec_2026-07.xlsx` (formatted output)**.
+**Autoloader ingest** `00_ingest_autoloader.py` (watches that folder → writes `cf_period_extract`):
+https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/00_ingest_autoloader.py
+(job `uc1_ingest_autoloader`).
 
-Parity notebook **`02_parse_append_parity.py`** (proves it + writes the Excel):
-- open/run: https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/02_parse_append_parity.py
-- oracle table `cf_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_benchmark
+The two Designer sources:
+- **`cf_prior_rec`** — last month's rolling file; **this is the Excel you drag** (see ③): https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_prior_rec
+- **`cf_period_extract`** — this month's numbers, **produced by the Autoloader ingest**: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract
 
-### ③ Build it — no code
-**Recommended (100% no-code) — the ✨ prompt.** On a blank canvas (**+ New → Data prep**) paste into
-the **✨ Generate** box:
+Excel files in `recon_landing/uc1/`: **the ONE you drag → `prior/CashFlowRec_2026-06.xlsx`** · bank drops
+→ `bank_recs/` · **formatted output → `output/CashFlowRec_2026-07.xlsx`**.
+
+Parity notebook **`02_parse_append_parity.py`** (proves it + writes the Excel): open/run —
+https://fevm-lr-dev-aws-us.cloud.databricks.com/#workspace/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/02_parse_append_parity.py
+· oracle `cf_benchmark`: https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_benchmark
+
+### ③ Build it — the story, no code
+
+**Part 1 — files land + Autoloader ingests (the automatic bit — say this).** The bank drops each
+account's workbook into **`recon_landing/uc1/bank_recs/`**. **Autoloader** picks up every new file the
+moment it lands and reads its header cells into **`cf_period_extract`** — this month's numbers, one row
+per account — with nobody re-keying or moving a file. *(Missing workbook → a 2-cell fallback covers it.)*
+Run it via job **`uc1_ingest_autoloader`** (or notebook `00_ingest_autoloader.py`, link above).
+
+**Part 2 — the Designer flow (no code).** Recommended — the **✨ prompt** on a blank **+ New → Data prep**
+canvas:
 > *Join cf_prior_rec to cf_period_extract on account_code, keeping all rows from cf_prior_rec. Add two
 > new columns: Jul_Current from cf_period_extract.current_period, and Jul_Control from
 > cf_period_extract.period_control. Keep every existing column of cf_prior_rec. Write to a table
 > cf_cashflow_rec_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
 
-Designer builds the flow — including the column naming. Set the Output table, **Run**. You typed English.
-
-**Or drag-drop the operators (clicks):**
-1. **Add source → `cf_prior_rec`.** *(Or drag `recon_landing/uc1/prior/CashFlowRec_2026-06.xlsx` onto
-   the canvas — same data, the "Designer eats Excel" beat; a swap for source 1, **not a 3rd source**.)*
-2. **Add source → `cf_period_extract`.**
-3. **Join** → **type Left**, primary `cf_prior_rec`, key `account_code`. *(Pick type + key — clicks.)*
-4. Expose this period's two values named **`Jul_Current`** and **`Jul_Control`**. ⚠️ *Renaming is an
-   expression step — don't type it. Paste this into **✨ Generate** to build just this step:*
+Set the Output table, **Run**. **Or drag-drop:**
+1. **Drag ONE Excel onto the canvas → `recon_landing/uc1/prior/CashFlowRec_2026-06.xlsx`** (the rolling
+   file). Designer reads it — this is source ① (same data as `cf_prior_rec`). *This is the only file you drag.*
+2. **Add source → `cf_period_extract`** — the table Autoloader just produced → source ②.
+3. **Join** → **type Left**, primary = the rolling file, key `account_code`. *(Pick type + key — clicks.)*
+4. Name this period's two values **`Jul_Current`** and **`Jul_Control`**. ⚠️ *Renaming is an expression
+   step — don't type it. Paste into **✨ Generate**:*
    > *Rename current_period to Jul_Current and period_control to Jul_Control; drop the source column; keep all other columns.*
 5. **Output → table `cf_cashflow_rec_designer`** → **Run.**
 
@@ -165,6 +177,7 @@ tables + lineage = scheduled, unattended, audited — nobody moves a file.
 git clone https://github.com/wryszka/designer-recon-accelerator.git && cd designer-recon-accelerator
 databricks bundle deploy -t dev -p DEV
 databricks bundle run generate_cashflow_rec     -t dev -p DEV
+databricks bundle run uc1_ingest_autoloader     -t dev -p DEV   # Autoloader → cf_period_extract
 databricks bundle run uc1_parse_append_parity   -t dev -p DEV
 databricks bundle run generate_control_sheet    -t dev -p DEV
 databricks bundle run automation_file_staging   -t dev -p DEV
