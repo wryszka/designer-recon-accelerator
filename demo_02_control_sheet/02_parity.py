@@ -87,6 +87,7 @@ assert ok, "UC2 correctness check failed"
 out = control.copy()
 os.makedirs(f"{vroot}/output", exist_ok=True)
 out.to_csv(f"{vroot}/output/ControlSheet.csv", index=False)
-out.to_excel(f"{vroot}/output/ControlSheet.xlsx", index=False)          # one line, stock pandas export
+# stock to_excel, no styling; write local first then copy (Volumes FUSE has no random-access write for xlsx)
+_t = tempfile.mkdtemp(); out.to_excel(f"{_t}/cs.xlsx", index=False); shutil.copy(f"{_t}/cs.xlsx", f"{vroot}/output/ControlSheet.xlsx")
 print(f"CSV + Excel → {vroot}/output/")
 display(spark.table(f"{fqn}.cs_population_recon"))

@@ -68,7 +68,8 @@ assert mism == 0 and status_mism == 0, "parity failed"
 # into the folder as examples. Exception highlighting lives in the dashboard/Genie layer, not in code here.
 os.makedirs(f"{vroot}/output", exist_ok=True)
 out.to_csv(f"{vroot}/output/CashFlowRec_{period}.csv", index=False)
-out.to_excel(f"{vroot}/output/CashFlowRec_{period}.xlsx", index=False)   # one line, stock pandas export
+# stock to_excel, no styling; write local first then copy (Volumes FUSE has no random-access write for xlsx)
+_t = tempfile.mkdtemp(); out.to_excel(f"{_t}/o.xlsx", index=False); shutil.copy(f"{_t}/o.xlsx", f"{vroot}/output/CashFlowRec_{period}.xlsx")
 
 recon = int((out[C_ST] == "Reconciled").sum())
 print(f"CSV + Excel → {vroot}/output/  ·  {recon}/{len(out)} reconciled, {len(out)-recon} exception(s)")
