@@ -36,6 +36,8 @@ see the last line.)*
 - **Jobs — how to find *our* jobs among the hundreds:** in **Workflows** (left nav), type **`recon-accel`** in
   the search box. **All eight demo jobs carry the `[recon-accel]` prefix and nothing else does** — so you see
   exactly ours. Direct links are given at each step below.
+- **Genie (ask in plain English) — the space is named `Designer Recon — Finance`:** https://fevm-lr-dev-aws-us.cloud.databricks.com/genie/rooms/01f1b1409ffd17d29b5f0ebe339cb117
+  *(This is the one and only Genie for this demo — when a step below says "ask Genie", it means this space.)*
 
 **UC1 is the hero — it walks the full arc.** UC2 adds the one proof they can't do today; UC3 is the
 automation they can't do today.
@@ -127,11 +129,12 @@ hunting, no re-keying, no 'did I grab the right file'. You still see everything 
 ## Act 3 — what you can't do today (the payoff — all screens, no code)
 
 **1 · Governance — where every figure came from, and what the run did.**
-- **Provenance:** the **`source_file`** column above — every number traceable to its workbook. Excel can't do that.
+- **Provenance:** open [`cf_period_extract`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract)
+  and look at the **`source_file`** column — every number is traceable to the exact workbook it came from. Excel can't do that.
 - **What the run read:** open [`cf_ingest_log`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_ingest_log)
   — one row per file, **ok** or **FAILED**. Nothing silently read; a bad file is quarantined, not skipped.
-- *Optional, no-code:* ask **Genie** in plain English — *"show me any files that failed to load this month"* —
-  and it answers off the same governed data. (Surface governance as a question, not a report to decode.)
+- *Optional, no-code:* open the **`Designer Recon — Finance`** Genie (link at the top of this doc) and ask in
+  plain English — *"show me any files that failed to load this month"* — it answers off the same governed data.
 
 **2 · Sharing — co-own the same work (talk track).**
 *"Today this lives in one person's Alteryx and one person's Excel; you email `final_v7.xlsx` around. Here you
@@ -238,8 +241,9 @@ from nowhere."*
   `Lineage` tab**. The graph shows it traces back through the join to **`cs_payments`** and
   **`cs_category_lookup`**, and column lineage shows which source column fed each field. *To see the actual
   payments behind a group,* click the **Join step on the canvas** and use its data **preview** (filter to that
-  branch), or ask **Genie** *"show the payments in the group I just clicked"*. *(There is no "click a cell →
-  see rows" button — lineage for the trace, the canvas preview or Genie for the underlying rows.)*
+  branch), or ask the **`Designer Recon — Finance`** Genie (top of doc) *"show the payments in the group I just
+  clicked"*. *(There is no "click a cell → see rows" button — lineage for the trace, the canvas preview or the
+  Genie for the underlying rows.)*
 - **Sharing:** **Share → Can Edit** — co-own the same flow, tracked.
 - **Versioning + previous runs:** the backing job's **Runs** tab (`[recon-accel] UC2 build control sheet →
   parity`, https://fevm-lr-dev-aws-us.cloud.databricks.com/jobs/471464150602709) + the table's **History** tab —
@@ -324,7 +328,7 @@ Tables (open as grids): [`af_version_audit`](https://fevm-lr-dev-aws-us.cloud.da
 
 ## Fallbacks — if short on time or it goes sideways
 1. **✨ prompt** (Act 1) — the no-code hero: one sentence builds the flow.
-2. **Open the pre-saved flow** — if you built + Saved `Cash-flow rec — monthly` beforehand.
+2. **Open the pre-saved flow** — the saved canvases are `Finance_Use_Case_1` (UC1) and `Finance_Use_Case_2` (UC2).
 3. **Drag-drop by hand** — the seven boxes.
 4. **No live build at all** — open the finished result grids ([`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec),
    [`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon)) and the **formatted Excel in the folder**. Still no code.
@@ -335,6 +339,32 @@ Tables (open as grids): [`af_version_audit`](https://fevm-lr-dev-aws-us.cloud.da
 3. *Everything starts and ends in Excel; the disgusting Format-Painter step is gone — the formatted Excel comes out on its own.*
 4. *Governance, sharing and every past run are the things a desktop tool and a spreadsheet can't give you.*
 5. *Nothing is hand-coded to maintain — the logic is the visual flow; there's no script anyone owns.*
+
+---
+
+## Canvas vs notebook — the honest answer (keep for the room)
+Someone will ask *"why do this on the canvas and not in a notebook?"* Here's the answer:
+
+**For the reconciliation work itself — join, look up, derive a status, aggregate, tie back — the canvas is the
+better choice, not a compromise:**
+- **No code** → a finance person builds *and changes* it. That's the whole point for this room.
+- **Self-documenting** → the logic *is* the picture; a reviewer or auditor understands it without reading code.
+- **Easy to change & co-own** → edit a box, Share → Can Edit. A notebook needs someone who writes code to touch it.
+- **You lose nothing in governance** → same lineage, Unity Catalog, versioning, scheduling as a notebook. No-code ≠ less-governed.
+
+**When a notebook genuinely wins (be honest about this):**
+- **Logic a visual tool can't express** — reading specific Excel header cells, parsing fixed-width files by position, calling a library, ML, heavy loops.
+- **Engineering rigour** — unit tests, heavy parameterisation, CI, packaging/reuse across many projects.
+- **The plumbing nobody should hand-edit** — ingest, the formatting template, custom validation checks, orchestration.
+
+**The unifying point — and it's exactly how this demo is built:** the canvas does the transformation logic the
+business owns (no code); the hidden notebooks do only what a picture can't draw (read the Excel cells, format
+the output, run the parity check). You start no-code and drop to code only for the ~5% that earns it — same
+platform, same data, same governance. If a rule ever outgrows the boxes, your engineer opens the flow's code
+view; it's a smooth handoff, not a cliff.
+
+**One line for the room:** *"Do the reconciliation where you can see and change it — the canvas. Keep code for
+the parts a picture can't draw, and hand those to your engineers once. You never choose between easy and powerful."*
 
 ---
 
