@@ -1,7 +1,8 @@
 # Designer Recon Accelerator — Runbook (1-hour session)
 
 Presenter guide for the one-hour session: **Lakeflow Designer**, **no code**, **Excel in and out**.
-Three use cases. Every table, notebook and file below is a **clickable link**.
+**Nothing you open in this session is code** — only a spreadsheet-style grid, an Excel file, or the visual
+canvas. Three use cases.
 
 > **About this demo.** All data is synthetic. No real organisation, bank, account or payee. A desktop
 > ETL tool (Alteryx / Power Query / KNIME) is a *workflow shape*, not a product comparison.
@@ -11,35 +12,26 @@ Three use cases. Every table, notebook and file below is a **clickable link**.
 can always tie the answer back to your own spreadsheet — nothing is hidden, nothing is taken away from you."*
 
 **No-code, two ways** (this is the whole point for them):
-- **Type one plain-English instruction** into the canvas **✨ Generate** box → Designer builds the flow.
-- **Or drag-drop operators** (Source, Join, Aggregate, Output) and configure them by clicking.
+- **Type one plain-English instruction** into the canvas **✨ Generate** box → Designer builds the flow, **or**
+- **drag-drop operators** (Source, Join, Aggregate, Output) and configure them by clicking.
 
-You **never write SQL**. If a step needs an expression, it's **⚠️-marked** below — and the ✨ prompt
-removes even those. (The generated SQL is viewable under **</> Code** *only if a technical colleague
-wants to review it* — the business user never touches it.)
+The only thing you ever type is **plain English**. **There is no code, no SQL, and no script anywhere in
+this session.** *(The synthetic data was built once before the room by a technical setup you never open —
+that lives outside this doc; see the last line.)*
 
-**And nothing is hand-coded to maintain.** The reconciliation logic *is* the visual flow; the reconciliation
-*checks* show as **results tables**; the Excel is a **standard download** (Save As). There is no bespoke
-script anyone owns. Where code genuinely runs unattended (file ingest, scheduling) it's **stock platform
-plumbing — like the macro behind an Excel button**, set up once, never edited. *(The `…parity` /
-`…parse_append` notebooks in the repo are our **demo QA + a coded mirror to prove the flow ties out** — a
-technical appendix for your engineers, **never** opened on the projector.)*
+**Everything opens from here — all no-code surfaces:**
+- **Tables (open as spreadsheet-style grids):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo
+- **Files (Excel in / out, the `recon_landing` folder):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing
 
-**Everything opens from here:**
-- **Repo:** https://github.com/wryszka/designer-recon-accelerator
-- **Notebooks (code):** https://github.com/wryszka/designer-recon-accelerator — *to open/run, in the workspace go to `Workspace → Shared → designer-recon-accelerator`*
-- **All tables:** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo
-- **Files (Volume `recon_landing`):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing
-
-Each use case below: **① the requirement** (say this to walk them through it) · **② assets** (links) ·
-**③ build it — no code** · **④ prove it**. **UC1 & UC2 are Designer flows. UC3 is NOT — it's scheduled
-Jobs (that's the point of UC3).**
+Each use case below: **① the requirement** (say this to walk them through it) · **② the story** ·
+**③ build it — no code** · **④ prove it — open a grid or the Excel**. **UC1 & UC2 are Designer flows;
+UC3 is scheduled runs you start with a button (that's the point of UC3).**
 
 ---
 
 # UC1 — Cash-flow reconciliation  *(the hero, ~half the session)*
 
-### ① The requirement — what they asked for (say this to walk them through it)
+### ① The requirement — what they asked for (say this)
 A **monthly** job across their bank accounts. Each account has a **bank-rec workbook** in a folder;
 someone reads a few summary cells off its header (**SAP / Accurate / Bank / Control**) and **appends two
 new columns** — this period's **Current** and **Control** — onto last month's **rolling** file (one
@@ -48,113 +40,101 @@ back to two cells from a separate SAP/Bank folder. Output must be a **formatted 
 ugly five-input Alteryx build (the tool can't hold a variable for the moving column position) and the
 "format" is a manual Format-Painter copy.
 
-**The bar they'll judge on:** no code / accessible · trustable (see & change the logic) · a colleague can
-co-own it · scheduled + audited · handles the missing workbook · **each account nets to zero** with
-exceptions flagged · formatted Excel out.
+**The bar they'll judge on:** no code / accessible · trustable (**see & change the logic on the canvas**) ·
+a colleague can co-own it · scheduled + audited · handles the missing workbook · **each account nets to
+zero** with exceptions flagged · formatted Excel out.
 
 ### ② The story you tell while building
 *"You drop your rolling cash-flow file — the one you carry forward. This month's account numbers are
-already here as a table, and you can see exactly which workbook each figure came from. We join them,
-reconcile, and hand you back a formatted Excel. No code, nothing re-keyed."* Keep it familiar — **you
-drop a file**, like today — and lean on **provenance** (⑤) so nothing feels like a black box.
+already here as a simple table, and you can see exactly which workbook each figure came from. We join
+them, reconcile, and hand you back a formatted Excel. No code, nothing re-keyed."* Keep it familiar —
+**you drop a file**, like today — and lean on **provenance** (⑤) so nothing feels like a black box.
 
-### ③ Build the flow — no code, all visual UI operators (7 boxes)
-Designer's operators do every step with **no SQL**: rename via the **Select** operator, derive via
-**Prepare → Formula** (you type a plain-English *description* in the Formula box — it is **not** a SQL box).
-1. **Source ① — drop the Excel:** drag **`rolling/CashFlowRec_2026-06.xlsx`** onto the canvas (the ONE
-   file). *(csv sits beside it if you'd rather drop csv.)*
-2. **Source ② — add the table `cf_period_extract`** (this month's numbers). *(Reassure the room: this
-   isn't a robot changing your figures — it's just this month's workbook cells read in for you, and the
+### ③ Build the flow — no code, all visual operators (7 boxes)
+Every step is a **click** or a line of **plain English** — you never open a code box.
+1. **Source ① — drop the Excel:** drag your rolling file **`rolling/CashFlowRec_2026-06.xlsx`** onto the
+   canvas (the ONE file). *(A `.csv` sits beside it if you'd rather drop csv.)*
+2. **Source ② — add this month's numbers** (the table `cf_period_extract`). *(Reassure the room: this isn't
+   a robot changing your figures — it's just this month's workbook cells read in for you, and a
    **`source_file`** column shows the exact workbook each number came from. Show ⑤ here if they look uneasy.)*
-3. **Join** — key `account_code`, type **Left** (keep every account).
-4. **Prepare → Formula** — add **`Jul_Status`**: type the description *"Reconciled when the Control figure
-   is zero, otherwise Exception"* and Designer writes the expression. No SQL box. *(It's the same
-   Reconciled/Exception rule you'd write by hand — visible and plain, you can read it back.)*
-5. **Select** — rename `current_period` → **`Jul_Current`**, `period_control` → **`Jul_Control`**; untick
-   `source` / `source_file`. (The Select operator has a rename field per column — pure clicks.)
+3. **Join** — pick the key `account_code`, choose **Left** (keep every account).
+4. **Prepare → Formula** — add **`Jul_Status`**: type the plain-English description *"Reconciled when the
+   Control figure is zero, otherwise Exception"* and Designer fills it in. **No code box** — it's the same
+   Reconciled/Exception rule you'd write by hand, and you can read it back in plain words.
+5. **Select** — rename `current_period` → **`Jul_Current`** and `period_control` → **`Jul_Control`** (a
+   rename field per column — pure clicks); untick the columns you don't want to carry.
 6. **Sort** — Exception rows to the top.
-7. **Output → `cf_cashflow_rec_designer`** → **Run.**
+7. **Output** → name it `cf_cashflow_rec_designer` → **Run.**
 
-All seven are **UI operators — no SQL typed, no code written.**
+Seven boxes, all clicks and plain English. **The canvas *is* the logic** — to change a rule you edit the
+box, in words, in front of them. That's the "trustable, not a black box" answer: they can see it and
+change it, live, without code.
 
-*Faster still — one **✨ Generate** prompt builds the whole flow.* On a blank **+ New → Data prep** canvas, paste:
+*Faster still — **one ✨ Generate prompt** builds the whole flow.* On a blank **+ New → Data prep** canvas,
+type this in plain English:
 > *Join the rolling cash-flow file to cf_period_extract on account_code, keeping every account (left join).
-> Add a column Jul_Status = "Reconciled" when the control figure is 0 else "Exception". Rename current_period
-> to Jul_Current and period_control to Jul_Control, and drop the source and source_file columns. Sort
-> Exception rows to the top. Write to cf_cashflow_rec_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
+> Add a column Jul_Status that says "Reconciled" when the control figure is 0, otherwise "Exception".
+> Rename current_period to Jul_Current and period_control to Jul_Control. Sort Exception rows to the top.
+> Save it as cf_cashflow_rec_designer.*
 
-Set Output, **Run**. (This is the recreate-in-Designer prompt — tables as inputs, no Excel drag needed.)
+Set the Output, **Run**. You typed a sentence; Designer built the flow.
 
-### ④ Prove it — reconciliation on the canvas, Excel from a standard download
-**Never say "notebook" and never open code on screen.** The two things you show:
+### ④ Prove it — reconciliation on the canvas, Excel from a download
+**Never say "notebook", never open code.** The two things you show:
 - **The reconciliation is already done on the canvas** — the **`Jul_Status`** column reads Reconciled /
-  Exception per account (**5 of 6 reconciled; ACC-003 the exception**). No extra step, no code — it's in the flow.
-- **Get the Excel:** press **Run** on the flow / the monthly Job and a plain **`.csv` + `.xlsx`** lands in the
-  folder — a **standard download**, the same run that fires automatically each month. **There is no
-  formatting code to write or maintain**, and nothing to project.
+  Exception per account (**5 of 6 reconciled; ACC-003 is the exception**). No extra step — it's in the flow.
+  Open the finished result as a grid: [`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec).
+- **Get the Excel:** the reconciled result **downloads straight to Excel/CSV** (a standard download button),
+  and the scheduled run drops the same formatted file in your folder:
+  [`uc1/output/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing). **No formatting to hand-do.**
 - *"Each account's Control nets to zero — that's the reconciliation; the one that doesn't is flagged."*
   *(Frame the exception as a win: it's the tool doing your checking, not breaking. Nobody broke month-end.)*
 
-> **If asked "is there code / a notebook behind that?"** — *"No. The logic is the visual flow you just
+> **If asked "is there code or a notebook behind this?"** — *"No. The logic is the visual flow you just
 > watched; the Excel is a standard download, like Save As. There's nothing hand-written for anyone to
-> maintain."* **Backstage only (never presented):** we separately validate every figure to the penny against
-> an independent calculation — that's *our* demo QA (there's no such benchmark in a real deployment). Hold it
-> for a skeptic; don't lead with it, don't open it.
+> maintain."* *(We do separately double-check every figure to the penny — that's our own quality check, kept
+> out of the room. Mention it only if a skeptic pushes; there's nothing to open.)*
 
-### ⑤ Provenance & audit (show this — it wins the sceptic *and* the auditor)
-- **Where every figure came from:** open `cf_period_extract` — the **`source_file`** column shows each
-  account's exact workbook (ACC-001 ← `BankRec_ACC-001_2026-07.xlsx`; the missing one ← fallback).
-- **What the run did:** `cf_ingest_log` — one row per file, **ok** or **FAILED**. Nothing silently ingested.
-- **Who changed the figures, when:** open the table in **Catalog Explorer → History tab** — a UI panel
-  listing every version, timestamp, user and operation (no command typed on screen). Flow/logic changes are
-  in **git**. That's the auditor-facing answer — an immutable, exportable record, not just a lineage picture.
-  *(Presenter aside, if a technical colleague asks: the same thing is `DESCRIBE HISTORY … cf_cashflow_rec`.)*
+### ⑤ Provenance & audit — a spreadsheet grid, not a report to decode
+- **Where every figure came from:** open [`cf_period_extract`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract)
+  — the **`source_file`** column shows each account's exact workbook (and the missing one shows the fallback).
+- **What the run did:** open [`cf_ingest_log`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_ingest_log)
+  — one row per file, **ok** or **FAILED**. Nothing silently read.
+- **Who changed the figures, when:** on any table, click the **History** tab in Catalog Explorer — a simple
+  panel listing every version, timestamp and user. That's the auditor answer, as a screen they can read.
 
 ### ⑥ When they attack — the hard cases (all real, on tap)
-- **"What about a bad file?"** Drop a corrupt `.xlsx` into `bank_recs/` and re-run the ingest → it's
-  logged **FAILED** in `cf_ingest_log` and **quarantined**; the other accounts still process. (Proven live.)
-- **"A missing workbook?"** ACC-006 has none → the **2-cell fallback** covers it (visible in `source_file`).
+- **"What about a bad file?"** Drop a corrupt workbook in the folder and re-run → it's logged **FAILED** and
+  quarantined; the other accounts still process. (Proven.)
+- **"A missing workbook?"** The missing account uses the **2-cell fallback** (visible in `source_file`).
 - **"Does it roll across the year?"** The rolling file already carries **Apr / May / Jun** and you just
   appended **Jul** — one column-pair per period. Next month appends Aug; at month 12 a new FY file starts.
-  (Bump the `period` widget to run another month live.)
-- **"Six accounts isn't my 200."** *Show it, don't tell it:* bump the generator's `n_accounts` widget to
-  50/200 and re-run live (~1 min) — same flow, same parity, more rows. It's **serverless / scale-to-zero**
-  (pay for the run, not idle desktops or servers).
-- **"This is lock-in — my Alteryx runs on my desktop, I own it."** The opposite: your **Excel/CSV stay in
-  your own folders**, the logic is plain **Spark SQL you can view and export** (**</> Code**) and it's
-  **git-versioned**, and it runs on **open Delta + Spark** — nothing is trapped in a proprietary binary
-  canvas file. You can walk away with your data and your logic any day.
+- **"Six accounts isn't my 200."** *Show it, don't tell it:* set the account count higher and re-run live —
+  same flow, same result, more rows. It's **serverless / scale-to-zero** (pay for the run, not idle desktops).
+- **"This is lock-in."** The opposite: your **Excel/CSV stay in your own folders**, and everything runs on
+  **open file formats you can take with you** — nothing is trapped in a proprietary file you can't open
+  without the tool. You can walk away with your data any day.
 
 ### ⑦ Collaborate & schedule (live, one click each)
-- **Co-own it:** **Share → Can Edit** — two people on the *same* governed flow, every change versioned
+- **Co-own it:** **Share → Can Edit** — two people on the *same* governed flow, every change tracked
   (vs emailing `final_v7.xlsx`).
-- **Schedule + run history:** the ingest/append run as **Jobs/Pipelines** — set a schedule, show the
-  **run history**; runs unattended, no licensed user in the loop.
+- **Schedule + run history:** set the flow to run on a **schedule** and show the **run history** — it runs
+  unattended, with no licensed user in the loop.
 
 ### ⑧ Only if pushed on the automation — keep it reassuring
 *"Your workbooks land in the same folder you use today; the platform reads them so you don't re-key — and
-you can see exactly what it used (⑤) and that nothing failed."* That's **Auto Loader** (job
-`uc1_ingest_autoloader`): a convenience with full visibility, **not** a black box that took your files away.
-
-*Optional bonus beat, only for a technical questioner who wants to see the file-lands-→-table magic:* the
-`demo_00_autoloader` pipeline is a 4-line streaming table that **appends automatically the moment a new Excel
-lands** (drop a file, re-run, watch the row count go 3 → 6). Keep it in your back pocket — don't lead with it,
-it's the opposite of the "you still drop your file" reassurance the nervous room needs.
+you can see exactly what it used (⑤) and that nothing failed."* It's a convenience with full visibility,
+**not** a black box that took your files away.
 
 ### Assets — kept deliberately small (6 accounts; scale up if they ask)
-Volume `recon_landing/uc1/` — a few examples, **xlsx and csv**:
-- **drag this →** `rolling/CashFlowRec_2026-06.xlsx` (also `.csv`)
-- account workbooks (5) → `bank_recs/` · the missing-account fallback → `fallback/`
-- **Excel/CSV output →** `output/CashFlowRec_2026-07.xlsx` (also `.csv`) — standard download, no formatting code
+Folder [`recon_landing/uc1/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing) — a few examples, **xlsx and csv**:
+- **drag this →** `rolling/CashFlowRec_2026-06.xlsx` (also `.csv`) · account workbooks → `bank_recs/` ·
+  the missing-account fallback → `fallback/` · **Excel/CSV output →** `output/` (standard download, no formatting to do)
 
-Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cf_prior_rec` (rolling) ·
-`cf_period_extract` (this month, with `source_file` provenance) · `cf_cashflow_rec` (result) ·
-`cf_benchmark` (oracle) · `cf_ingest_log` (audit: ok/FAILED per file).
-
-Notebooks — **technical appendix: for your engineers, never the projector** (GitHub; run in the workspace at `/Workspace/Shared/designer-recon-accelerator/demo_01_cashflow_rec/…`):
-- generate: https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/01_generate_sources.py
-- Autoloader ingest (job `uc1_ingest_autoloader`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/00_ingest_autoloader.py
-- parity + Excel (job `uc1_parse_append_parity`): https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_01_cashflow_rec/02_parse_append_parity.py
+Tables (open as grids): [`cf_prior_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_prior_rec) (rolling) ·
+[`cf_period_extract`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_period_extract) (this month, with `source_file`) ·
+[`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec) (result) ·
+[`cf_ingest_log`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_ingest_log) (ok/FAILED per file).
 
 ---
 
@@ -166,188 +146,167 @@ each payment, **split into the six-or-seven groups** they report by (category + 
 and a **control sheet** that **sums each group** — and the parts must **tie back to the whole with 0.00
 variance**. That tie-back *is* the control.
 
-**The bar:** no code / accessible · trustable + parity · co-own · scheduled + audited · Excel in / out ·
+**The bar:** no code / accessible · trustable + proof · co-own · scheduled + audited · Excel in / out ·
 the parts tie to the whole.
 
 ### ② The story you tell
 *"You drop your payments sheet and your category list; we look up each payment's category, group them the
-way you report, and prove **every single payment** is accounted for and the groups add back to the total — to
-the penny. Even a payment whose supplier isn't in the category list shows up as its own **Unmatched** group,
-so the total is always the true whole. No code, nothing re-keyed."*
+way you report, and prove **every single payment** is accounted for and the groups add back to the total —
+to the penny. Even a payment whose supplier isn't in the category list shows up as its own **Unmatched**
+group, so the total is always the true whole. No code, nothing re-keyed."*
 
-### ③ Build the flow — no code, all UI operators (very easy — here's exactly how)
-**For a nervous room, lead with this — click five boxes, none need SQL** (each box is a click or a
-plain-English line — this *is* the non-technical route):
+### ③ Build the flow — no code, all visual operators (very easy — here's exactly how)
+**For a nervous room, lead with this — five boxes, all clicks and plain English:**
 1. **Source ① — drop `inputs/Payments.xlsx`.**  2. **Source ② — drop `inputs/CategoryLookup.xlsx`.** *(both files; csv beside each.)*
-3. **Join** — *how: drop a **Join**, wire both in, pick `supplier` on each side, choose **Left join** — "keep
+3. **Join** — drop a **Join**, wire both in, pick `supplier` on each side, choose **Left join** — *"keep
    every payment; never drop one just because its category is missing."*
-4. **Add the `branch` group** — *how (easy): drop a **Prepare** operator → **Formula** → type in plain English:
-   "if category is empty, 'Unmatched (no category)', else company_code then Provider if category is
-   Claims/Refund/Travel else NonProvider then Img2 if account_id is even else Img3." Designer writes it — no SQL.*
-5. **Total each group** — *how: drop an **Aggregate** → group by `branch` → sum `amount_paid` → `branch_total`.*
-6. **Output → `cs_control_sheet_designer`** → **Run.**
+4. **Add the `branch` group** — drop a **Prepare → Formula** and type it in plain English:
+   *"if the category is empty, call it 'Unmatched (no category)', otherwise the company code, then Provider
+   if the category is Claims/Refund/Travel else NonProvider, then Img2 if account_id is even else Img3."*
+   Designer fills it in — **no code box.**
+5. **Total each group** — drop an **Aggregate** → group by `branch` → sum `amount_paid` → `branch_total`.
+6. **Output** → `cs_control_sheet_designer` → **Run.**
 
-Five boxes, each a click or a plain-English line — **no SQL.** The grand total and the tie-back are the
-**check** in ④, so you never hand-build a total row that could drift.
+Five boxes, each a click or a plain-English line. The grand total and the tie-back are the **check** in ④,
+so you never hand-build a total row that could drift.
 
-**The shortcut, for a technical colleague — one ✨ prompt** builds the same flow in one go. *(Offer this as
-the fast path, not the beginner path — it packs the whole branch rule into one paragraph.)* On a blank
-**+ New → Data prep** canvas, paste:
+*The shortcut — **one ✨ prompt** builds the same flow.* On a blank **+ New → Data prep** canvas, type:
 > *Join Payments to CategoryLookup on supplier, keeping every payment (left join). Add a branch column: if
-> there's no category call it "Unmatched (no category)", otherwise company_code + ' ' + (Provider if category
-> is Claims, Refund or Travel else NonProvider) + ' ' + (Img2 if account_id is even else Img3). Group by branch
-> and sum amount_paid as branch_total. Write to cs_control_sheet_designer in lr_dev_aws_us_catalog.designer_recon_demo.*
+> there's no category call it "Unmatched (no category)", otherwise the company code, then "Provider" when
+> the category is Claims, Refund or Travel and "NonProvider" otherwise, then "Img2" when account_id is even
+> and "Img3" otherwise. Group by branch and total amount_paid. Save it as cs_control_sheet_designer.*
 
-Set Output, **Run**. Same result — English in, no SQL. *(The grand total + tie-check is ④, so the canvas stays simple.)*
+Set the Output, **Run**. Same result — a sentence in, a flow out.
 
-### ④ Prove it — population reconciliation as a results table (the beat that wins the room)
-**Show the table `cs_population_recon` on screen — a results table, not code.** It doesn't just flash "0.00";
-it proves the total is the **whole population**:
+### ④ Prove it — the tie-back as a spreadsheet grid (the beat that wins the room)
+**Open [`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon) as a grid — a simple table, not code.** It doesn't just flash "0.00"; it proves the
+total is the **whole population**:
 - **Every payment accounted for:** `400 in = 392 matched + 8 unmatched` — **0 dropped**.
-- **No double-counting:** rows after the join = 400; **0 duplicate suppliers** in the lookup — **0 fan-out**.
-- **Groups sum to all payments:** Σ groups = Σ all = **−322,322.44**, **variance 0.00** — including the Unmatched group.
-- It's a **data-quality gate** — the run **fails** if the control ever breaks (⑤), so it can't silently go wrong.
-- **Excel out:** press **Run** → plain **`.csv` + `.xlsx`** in the folder — a **standard download, no
-  formatting code to maintain**.
+- **No double-counting:** rows after the join = 400; **0 duplicate suppliers** — **0 fan-out**.
+- **Groups sum to all payments:** Σ groups = Σ all = **−322,322.44**, **variance 0.00** — including Unmatched.
+- The run **stops itself** if the control ever breaks — so it can't silently go wrong.
+- **Excel out:** the control sheet **downloads to Excel/CSV** and the scheduled run drops it in
+  [`uc2/output/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing) — standard download, nothing to hand-format.
 
-*"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total — is
-exactly what this reconciles. Nothing hides behind a green 0.00."* *(Backstage only, never presented: a
-benchmark comparison validates our demo — there's no benchmark in a real deployment.)*
+*"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total —
+is exactly what this reconciles. Nothing hides behind a green 0.00."*
 
-### ⑤ Trust & audit
-- **Lineage drill-through (Excel can't):** in Catalog Explorer, trace a group total → the aggregate → the join
-  → the actual payment rows. Click a number, see the payments behind it.
-- **The check is a gate, not decoration:** the population/parity assert **fails the run** if the control ever
-  breaks — it can't silently go wrong.
-- **See/amend logic:** **</> Code**; **audit:** the table's **History tab** in Catalog Explorer (who/when/what,
-  a UI panel — no command on screen) + git. *(Presenter aside: the command form is `DESCRIBE HISTORY … cs_control_sheet`.)*
+### ⑤ Trust & audit — all screens they can read
+- **Lineage drill-through (Excel can't):** in Catalog Explorer, trace a group total → the aggregate → the
+  join → the actual payment rows. Click a number, see the payments behind it.
+- **The check is a gate, not decoration:** the tie-back **stops the run** if the control ever breaks.
+- **See/change the logic:** it's the **visual flow** — edit a box in plain words. **Audit:** the table's
+  **History** tab (who / when / what), a panel they can read.
 
 ### ⑥ When they attack — the hard cases (proven, not promised)
-- **"Supplier not in the lookup?"** Shown live: **8** such payments land in the **Unmatched** group and stay in
-  the total (`cs_population_recon`: 392 + 8 = 400). Not dropped, not hidden.
-- **"Duplicate-supplier fan-out / double-count?"** The recon asserts **rows-after-join = rows-in** and **0
-  duplicate suppliers** — a fan-out fails the run.
-- **"Eight groups isn't my dozens / millions of rows."** *Show it:* bump `n_payments` and re-run live —
-  same flow, same 0.00 tie-back at any scale, serverless / scale-to-zero.
-- **"Your parity marks its own homework."** Fair — that's the internal check; the **population reconciliation**
-  is the correctness check, and we'll **tie it to your exported control total, on your file**, live.
-- **"This locks me in."** No — Excel/CSV stay in **your folders**, the logic is exportable **Spark SQL**
-  (**</> Code**), **git-versioned**, on **open Delta** — walk away with data *and* logic any time.
+- **"Supplier not in the lookup?"** Shown live: **8** such payments land in the **Unmatched** group and stay
+  in the total (392 + 8 = 400). Not dropped, not hidden.
+- **"Duplicate-supplier double-count?"** The recon shows **rows-after-join = rows-in** and **0 duplicate
+  suppliers** — a double-count stops the run.
+- **"Eight groups isn't my dozens."** *Show it:* raise the payment count and re-run — same 0.00 tie-back at
+  any scale, serverless / scale-to-zero.
+- **"Your check marks its own homework."** Fair — so we'll **tie it to your exported control total, on your
+  own file**, live.
+- **"This locks me in."** No — Excel/CSV stay in **your folders**, on **open formats you can take with you**;
+  nothing is trapped in a proprietary file.
 
 ### ⑦ Collaborate, schedule & reuse (live)
-- **Share → Can Edit** — co-own the same flow, versioned. **Schedule** it as a Job with run history.
-- **One definition, everywhere:** point **Genie** or an **AI/BI dashboard** at `cs_control_sheet`. **If a
+- **Share → Can Edit** — co-own the same flow, tracked. **Schedule** it with run history.
+- **One definition, everywhere:** point **Genie** or an **AI/BI dashboard** at the control sheet. **If a
   technical/keen person is in the room, do it live** — ask *"Provider groups by company, largest first"* in
-  plain English and let the answer come back off the same governed numbers. It's a 30-second move that turns
-  an interested analyst into an advocate — don't leave it as a "next session" promise if you have the minute.
+  plain English and let the answer come back off the same governed numbers. A 30-second move that turns an
+  interested analyst into an advocate — don't leave it as a "next session" promise if you have the minute.
 
 ### Assets — small & legible (~400 payments → 8 groups + Unmatched)
-Volume `recon_landing/uc2/` — **xlsx + csv**: **drag** `inputs/Payments.xlsx` **and** `inputs/CategoryLookup.xlsx`;
-**output** `output/ControlSheet.xlsx` (+ `.csv`).
-Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `cs_payments` · `cs_category_lookup` ·
-`cs_control_sheet` (result) · `cs_benchmark` (oracle) · `cs_population_recon` (rows in = grouped, 0 dropped/dup).
-Notebooks — **technical appendix: engineers, not the projector** (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_02_control_sheet/…`):
-generate — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/01_generate_sources.py ·
-parity + recon + Excel (job `uc2_control_sheet_parity`) — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_02_control_sheet/02_parity.py
+Folder [`recon_landing/uc2/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing) — **xlsx + csv**: drag `inputs/Payments.xlsx` **and**
+`inputs/CategoryLookup.xlsx`; **output** in `output/`.
+Tables (open as grids): [`cs_payments`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_payments) ·
+[`cs_category_lookup`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_category_lookup) ·
+[`cs_control_sheet`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_control_sheet) (result) ·
+[`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon) (the tie-back).
 
 ---
 
-# UC3 — Scheduled automation  *(NOT Designer — this is the point)*
+# UC3 — Scheduled automation  *(started with a button, watched from a screen)*
 
 ### ① The requirement — what they asked for (say this)
-Two Python scripts they run **by hand** today. The question they set: *"can the platform schedule and log
-this like our scripts — unattended and audited?"* **Answer: yes — Lakeflow Jobs + Auto Loader + Unity
-Catalog audit. No Designer canvas — and that honesty is the point.**
+Two jobs they run **by hand** today, on their desktop. The question they set: *"can the platform run and
+log these on a schedule — unattended and audited?"* **Answer: yes — and you start it with a button and
+watch it from a screen; there's nothing to open.**
 - **3a — file staging:** files land in **two folders**; pick, per report code, the **correct version by
   file name** (not latest-arrived), and **copy** to a destination. No data change.
-- **3b — fixed-width BDX:** monthly, run **all ~30** of last month's **fixed-width** files → **parse by
-  position** → **contra-check each** (detail rows sum to the file's contra row) → **consolidate** → log.
+- **3b — daily BDX files:** monthly, run **all ~30** of last month's fixed-layout files → read each →
+  **check each file balances** (its detail rows sum to its control row) → **consolidate** → log.
 
 **The bar:** scheduled · unattended · **audited** · **every file accounted for** (nothing silently dropped,
-mis-picked or mis-parsed) · runs like their script, but governed.
+mis-picked or mis-read) · runs like their job, but governed.
 
-### ② The story you tell (governance over cron)
-*"You already schedule a script. The difference: it fires the moment a file lands, it can't silently lose
+### ② The story you tell (governance over a desktop macro)
+*"You already run these by hand. The difference: it fires the moment a file lands, it can't silently lose
 or mis-read a file — every file gets a visible verdict — and the whole run is audited on the platform,
-not on someone's laptop."*
-*(Reassure the nervous analyst: you still just drop the files, it runs itself on a schedule, and it hands
-you a plain summary — **you never open the Python**. This is the part IT sets up once; you just receive it.)*
+not on someone's laptop."* *(Reassure the nervous analyst: you still just drop the files, it runs itself,
+and it hands you a plain summary — **you never open anything technical**. This is the part IT sets up once.)*
 
-### ③ Run it (~5 min, no build) + the reconciliation that wins the room
-Run jobs **`automation_file_staging`** (3a) and **`automation_bdx_parser`** (3b) — or the notebooks.
-- **3a — every file accounted for:** `af_version_audit` marks each file **chosen / superseded /
-  unrecognized** and reconciles: **9 seen = 5 chosen + 4 superseded + 0 unrecognized**, 5 copied. You *see*
-  which version was picked and why the others weren't — nothing silently ignored.
-- **3b — every file statused (value-level, not just count):** `fw_contra_log` gives each file **MATCH /
-  MISMATCH / NO CONTRA / PARSE ISSUE / MULTI CONTRA / EMPTY**, asserted to cover **every** landed file —
-  here **30 = 27 MATCH + 2 MISMATCH + 1 NO CONTRA**. A ragged line that won't parse → **PARSE ISSUE**
-  (never summed as 0); a second contra row → **MULTI CONTRA** (never double-counted).
-- **The point:** Job **run history** + these audit tables + Catalog **lineage** = scheduled, unattended,
-  **audited** — and it **fails loudly**, it never hides a bad file behind a green tick.
+### ③ Run it with a button + the reconciliation that wins the room
+**Press Run** on the two scheduled jobs (in **Workflows**) — no build, no code on screen. Then show the
+**results as grids**:
+- **3a — every file accounted for:** open [`af_version_audit`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_version_audit)
+  — each file marked **chosen / superseded / unrecognized**: **9 seen = 5 chosen + 4 superseded + 0
+  unrecognized**, 5 copied. You *see* which version was picked and why the others weren't — nothing ignored.
+- **3b — every file statused:** open [`fw_contra_log`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_contra_log)
+  — each file **balances / doesn't balance / no control row / can't read / empty**, covering **every** file:
+  **30 = 27 balanced + 2 not + 1 no control row**. A file that won't read is **flagged, never counted as
+  zero**; a duplicate control row is **flagged, never double-counted**.
+- **The point:** the **run history** + these audit grids = scheduled, unattended, **audited** — and it
+  **fails loudly**, it never hides a bad file behind a green tick.
 
-### ④ Trust & audit
-- The status logs *are* the audit: who ran it (run history), which file was used/rejected and why
-  (`af_version_audit`), which files didn't tie (`fw_contra_log`). Plus each table's **History tab** in
-  Catalog Explorer + git on the code.
-- The **asserts are DQ gates** — the file-count and value-level checks **fail the run** if anything is
-  unaccounted for, so the control can't silently pass.
+### ④ Trust & audit — the screens are the audit
+- The status grids *are* the audit: who ran it (run history), which file was used/rejected and why
+  (`af_version_audit`), which files didn't balance (`fw_contra_log`), plus each table's **History** tab.
+- The checks are **gates** — the run **fails** if anything is unaccounted for, so the control can't
+  silently pass.
 
 ### ⑤ When they attack — honest answers
-- **"A bad file — no contra / empty / a shifted column?"** Shown: NO CONTRA / EMPTY / **PARSE ISSUE** —
-  flagged and kept out of the totals, not silently absorbed. (Proven live.)
-- **"Nobody's paged when it breaks — my macro at least errors on my screen."** The opposite: **Job failure
-  notifications are native and out of the box** — email / Slack / PagerDuty / webhook on failure (or on a DQ
-  gate tripping), set with a click. You're *more* likely to know it broke than with a script on one laptop.
-- **"cron already does this."** True for the middle; the platform adds **on-arrival triggering, governed
-  audit + lineage, DQ gates, failure alerting, and no desktop dependency** — the same governed home as UC1/UC2.
-- **Known edges — we'll be straight (roadmap, not claimed):** "highest version by name" is a heuristic (a
-  *re-issued* older version needs a smarter `supersedes`/effective-date rule); **idempotent single-file
-  re-run**; and **big-volume patterns** (the demo notebooks list/collect at small scale). We name these
-  rather than pretend — each is a standard platform pattern to add.
+- **"A bad file — no control row / empty / a mis-aligned line?"** Shown: flagged and **kept out of the
+  totals**, not silently absorbed. (Proven.)
+- **"Nobody's paged when it breaks."** The opposite: **failure alerts are built in** — email / Slack /
+  PagerDuty on a failure (or on a check tripping), set with a click. You're *more* likely to know it broke
+  than with a job on one laptop.
+- **"A desktop tool already does this."** True for the middle; the platform adds **on-arrival triggering,
+  a governed audit trail, the checks-as-gates, failure alerts, and no desktop dependency** — the same
+  governed home as UC1/UC2.
+- **Known edges — we'll be straight:** picking "the highest version by name" is a rule that a *re-issued*
+  older file would need refining; single-file re-runs and very high volumes are standard patterns to add.
+  We name these rather than pretend.
 
 ### Assets — kept small (2 folders / 5 codes; ~30 daily files)
-Volume `recon_landing/`: **3a** `uc3a/sources/{folder_a,folder_b}` → `uc3a/destination`; **3b**
-`uc3b/incoming` → `uc3b/output` (consolidated CSV + `run_summary_*.txt`).
-Tables (`explore/data/lr_dev_aws_us_catalog/designer_recon_demo/…`): `af_version_audit` · `af_files_staged` ·
-`af_staging_audit` (3a) · `fw_bdx_consolidated` · `fw_contra_log` (3b).
-Notebooks (GitHub; run in workspace `/Workspace/Shared/designer-recon-accelerator/demo_03_automation/…`):
-3a — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/01_file_staging.py ·
-3b — https://github.com/wryszka/designer-recon-accelerator/blob/main/demo_03_automation/02_fixedwidth_parser.py
+Folder [`recon_landing/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing): **3a** `uc3a/…` → `uc3a/destination`; **3b** `uc3b/incoming` →
+`uc3b/output` (consolidated CSV + a plain run summary).
+Tables (open as grids): [`af_version_audit`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_version_audit) ·
+[`af_files_staged`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_files_staged) ·
+[`fw_bdx_consolidated`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_bdx_consolidated) ·
+[`fw_contra_log`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/fw_contra_log).
 
 **Closing line (only if time):** *same governed data → Genie + dashboard + forecasting = the next session.*
 
 ---
 
 ## Fallbacks — if short on time or it goes sideways
-1. **✨ prompt** (③ above) — the no-code hero. 2. **Open the pre-saved flow** — if you built + Saved
-`Cash-flow rec — monthly` beforehand. 3. **Drag-drop by hand** (the ⚠️ steps need an expression).
-4. **No Designer** — show the finished **`cf_cashflow_rec`** table (the `Jul_Status` column) + the exported
-   **Excel in the folder**. *(The coded mirror is the backstage receipt for you — don't project it.)*
+1. **✨ prompt** (③) — the no-code hero: one sentence builds the flow.
+2. **Open the pre-saved flow** — if you built + Saved `Cash-flow rec — monthly` beforehand.
+3. **Drag-drop by hand** — the seven boxes in ③.
+4. **No live build at all** — open the finished result grids ([`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec),
+   [`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon)) and the exported **Excel in the folder**. Still no code.
 
 ## Lines to land
-1. *No code — you type plain English (or drag boxes); Designer writes any SQL, and the business user never sees it.*
+1. *No code — you type plain English or drag boxes; you never see a line of code.*
 2. *Everything starts and ends in Excel; the positional hack that made this "disgusting" is gone, and the Excel comes out from a standard download — nothing to hand-format.*
-3. *It's reconciled to the penny, and a technical colleague can still open and amend the logic.*
+3. *It's reconciled to the penny, and the logic is right there on the canvas to see and change.*
 4. *Nobody moves a file: it lands, and the work runs.*
-5. *Nothing is hand-coded to maintain — the logic is the visual flow, the Excel is a standard download; there's no bespoke script anyone owns.*
+5. *Nothing is hand-coded to maintain — the logic is the visual flow; there's no script anyone owns.*
 
-## (Re)build the data — CLI, profile `DEV`
-```bash
-git clone https://github.com/wryszka/designer-recon-accelerator.git && cd designer-recon-accelerator
-databricks bundle deploy -t dev -p DEV
-databricks bundle run generate_cashflow_rec     -t dev -p DEV
-databricks bundle run uc1_ingest_autoloader     -t dev -p DEV   # Autoloader → cf_period_extract
-databricks bundle run uc1_parse_append_parity   -t dev -p DEV
-databricks bundle run generate_control_sheet    -t dev -p DEV
-databricks bundle run automation_file_staging   -t dev -p DEV
-databricks bundle run automation_bdx_parser     -t dev -p DEV
-```
+---
 
-## Troubleshooting
-| Symptom | Fix |
-|---|---|
-| Can't drag `.xlsx` onto the canvas | Enable Excel file-format support in workspace settings; or use `cf_prior_rec`. |
-| Source picker empty | Point catalog/schema at **lr_dev_aws_us_catalog / designer_recon_demo**. |
-| `02_parity` says "canvas output pending" | Build the flow + set its Output table first. |
-| `DELTA_METADATA_MISMATCH` on a log table | Stale table — `DROP TABLE` it once; the notebook recreates it. |
-| Tables missing | Run the jobs above. |
+> **Technical setup — one-time, before the session, NEVER opened in the room.** How the synthetic data is
+> built, the behind-the-scenes checks that prove parity, and the rebuild steps live in **`docs/SETUP.md`**
+> in the repository. None of it is part of the demo — the presenter does not open it during the session.
