@@ -41,6 +41,22 @@ targets:
 
 resources:
   jobs:
+    make_autoloader_files:
+      name: "[recon-accel] Auto Loader demo — make example files"
+      tasks:
+        - task_key: make
+          notebook_task:
+            notebook_path: ./demo_00_autoloader/00_make_files.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              landing_volume_name: ${var.landing_volume_name}
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "3"
+
     generate_cashflow_rec:
       name: "[recon-accel] UC1 generate cash-flow rec sources"
       tasks:
@@ -135,6 +151,16 @@ resources:
         - environment_key: serverless
           spec:
             client: "3"
+
+  pipelines:
+    autoloader_demo:
+      name: "[recon-accel] Auto Loader folder→table demo"
+      serverless: true
+      catalog: ${var.catalog_name}
+      schema: ${var.schema_name}
+      libraries:
+        - file:
+            path: ./demo_00_autoloader/pipeline.sql
 
 sync:
   exclude:
