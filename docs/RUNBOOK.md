@@ -33,6 +33,9 @@ see the last line.)*
 **Everything opens from here — all no-code surfaces:**
 - **Tables (open as spreadsheet-style grids):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo
 - **Files (Excel in / out, the `recon_landing` folder):** https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing
+- **Jobs — how to find *our* jobs among the hundreds:** in **Workflows** (left nav), type **`recon-accel`** in
+  the search box. **All eight demo jobs carry the `[recon-accel]` prefix and nothing else does** — so you see
+  exactly ours. Direct links are given at each step below.
 
 **UC1 is the hero — it walks the full arc.** UC2 adds the one proof they can't do today; UC3 is the
 automation they can't do today.
@@ -40,6 +43,10 @@ automation they can't do today.
 ---
 
 # UC1 — Cash-flow reconciliation  *(the hero, ~half the session — walks the whole arc)*
+
+> **You asked** (from your requirements): *"can we read the header cells from each bank-rec workbook and
+> append this period's two columns onto the rolling file — without Alteryx's positional hack — with every
+> account netting to zero, exceptions flagged, and a formatted Excel out?"* **This is how we tackle it.**
 
 ### ① The requirement — what they do today (say this to walk them through it)
 A **monthly** job across their bank accounts. Each account has a **bank-rec workbook** in a folder;
@@ -132,7 +139,9 @@ hunting, no re-keying, no 'did I grab the right file'. You still see everything 
 'which copy is the real one'."*
 
 **3 · Versioning + previous runs — nothing is ever lost.**
-- **Every past run** is kept: show the flow's **run history** (when it ran, by whom, pass/fail).
+- **Every past run** is kept: open the backing job's **Runs** tab — `[recon-accel] UC1 parse → append → parity`
+  → https://fevm-lr-dev-aws-us.cloud.databricks.com/jobs/129351423441855 → the **Runs** tab lists every past
+  run (when, by whom, pass/fail).
 - **Every past version of the result** is kept: on any table, click the **History** tab in Catalog Explorer
   — a simple panel of every version, timestamp and user. *"You can open last March's number as it stood then —
   try that with an overwritten spreadsheet."*
@@ -161,6 +170,9 @@ Tables (open as grids): [`cf_prior_rec`](https://fevm-lr-dev-aws-us.cloud.databr
 ---
 
 # UC2 — Control sheet  *(a task they do today + the one proof they can't do today)*
+
+> **You asked:** *"can we look up a category onto each payment, split into the six-or-seven groups we report
+> by, and produce a control sheet whose parts tie back to the whole at 0.00 variance?"* **This is how we tackle it.**
 
 ### ① The requirement — what they do today (say this)
 Two datasets: a **payments** sheet and a **supplier → category** lookup. **Look up** the category onto
@@ -222,10 +234,16 @@ from nowhere."*
 > to show on screen.
 
 ### What you can't do today (same three, briefly)
-- **Governance:** trace any group total → the join → the actual payment rows (lineage). Click a number, see
-  the payments behind it. Or ask **Genie**: *"which suppliers had no category this month?"*
+- **Governance / lineage — exact path:** open `cs_control_sheet_designer` in **Catalog Explorer → the
+  `Lineage` tab**. The graph shows it traces back through the join to **`cs_payments`** and
+  **`cs_category_lookup`**, and column lineage shows which source column fed each field. *To see the actual
+  payments behind a group,* click the **Join step on the canvas** and use its data **preview** (filter to that
+  branch), or ask **Genie** *"show the payments in the group I just clicked"*. *(There is no "click a cell →
+  see rows" button — lineage for the trace, the canvas preview or Genie for the underlying rows.)*
 - **Sharing:** **Share → Can Edit** — co-own the same flow, tracked.
-- **Versioning + previous runs:** run history + the table **History** tab — every past control sheet kept.
+- **Versioning + previous runs:** the backing job's **Runs** tab (`[recon-accel] UC2 build control sheet →
+  parity`, https://fevm-lr-dev-aws-us.cloud.databricks.com/jobs/471464150602709) + the table's **History** tab —
+  every past control sheet kept.
 - **"Your check marks its own homework."** Fair — so we'll **tie it to your exported control total, on your
   own file**, live.
 
@@ -239,6 +257,10 @@ Inputs (open as grids): [`cs_payments`](https://fevm-lr-dev-aws-us.cloud.databri
 ---
 
 # UC3 — Scheduled automation  *(the thing you can't do today — started with a button, watched from a screen)*
+
+> **You asked:** *"can the platform run and log our two by-hand scripts on a schedule — pick the correct file
+> version, contra-check each fixed-width file, and account for every file — unattended and audited?"* **This is
+> how we tackle it.**
 
 ### ① The requirement — what they do today (say this)
 Two jobs they run **by hand** today, on their desktop. The question they set: *"can the platform run and
@@ -259,7 +281,11 @@ is audited on the platform, not on someone's laptop."* *(Reassure: you still jus
 itself and hands you a plain summary — **you never open anything technical**.)*
 
 ### ③ Run it with a button + the reconciliation that wins the room
-**Press Run** on the two scheduled jobs (in **Workflows**) — no build, no code. Then show the **grids**:
+**The two jobs — open each by its link and hit `Run now` (top-right), or in Workflows search `recon-accel`:**
+- **3a — file staging:** `[recon-accel] UC3 file staging (Autoloader)` → https://fevm-lr-dev-aws-us.cloud.databricks.com/jobs/119422932361080
+- **3b — fixed-width + contra:** `[recon-accel] UC3 fixed-width parser + contra` → https://fevm-lr-dev-aws-us.cloud.databricks.com/jobs/450258033805367
+
+No build, no code on screen — you press **Run now** and watch. Then show the **grids**:
 - **3a — every file accounted for:** [`af_version_audit`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/af_version_audit)
   marks each file **chosen / superseded / unrecognized**: **9 seen = 5 chosen + 4 superseded + 0
   unrecognized**, 5 copied. You *see* which version was picked and why — nothing silently ignored.
