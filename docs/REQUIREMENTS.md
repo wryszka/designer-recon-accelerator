@@ -61,7 +61,7 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 | U2.1 category lookup | **Join** Payments ↔ CategoryLookup on `supplier` |
 | U2.2 split into ~6–7 groups | **Prepare/Formula** `branch` → **Aggregate** = 8 group totals |
 | U2.3 summary sums each | the control sheet totals each group + a **MAIN** row |
-| U2.4 parts tie to whole 0.00 | **population reconciliation**: 400 in = 392 matched + 8 unmatched (0 dropped), 0 dup suppliers (0 fan-out), Σgroups = Σall = −322,322.44, variance 0 |
+| U2.4 parts tie to whole 0.00 | **built into the Designer flow** (not a magic table): a tie-back branch outputs `cs_tieback_designer` = Σgroups vs Σall = −322,322.44, variance 0; the Join node shows 400 in→400 out (0 dropped / 0 fan-out); `cs_population_recon` is the backstage QA twin, not shown live |
 | C1 no-code | Join / Prepare-Formula / Aggregate — UI operators, no SQL (5 boxes) |
 | C2 trustable | code pane + parity + lineage drill-through |
 | C3 collaborate | Share → Can Edit |

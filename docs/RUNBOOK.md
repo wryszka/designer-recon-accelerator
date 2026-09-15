@@ -88,8 +88,9 @@ box, in words, in front of them.
 
 ### Prove it — reconciliation on the canvas, formatted Excel out
 - **The reconciliation is already done on the canvas** — the **`Jul_Status`** column reads Reconciled /
-  Exception per account (**5 of 6 reconciled; ACC-003 is the exception**). Open it as a grid:
-  [`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec).
+  Exception per account (**5 of 6 reconciled; ACC-003 is the exception**). Open **your flow's own output**
+  `cf_cashflow_rec_designer` as a grid. *(If you didn't build live, the pre-built [`cf_cashflow_rec`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cf_cashflow_rec)
+  twin holds the same result.)*
 - **The formatted Excel is automatic** — a **formatted** `.xlsx` (bold headers, exceptions in red) **and** a
   `.csv` land in your folder, [`uc1/output/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing).
   **The disgusting Format-Painter step is gone — the formatting comes out on its own.**
@@ -174,32 +175,51 @@ the parts tie to the whole.
 *"You drop your payments sheet and your category list; we look up each payment's category, group them the
 way you report, and hand you a formatted control sheet — same steps, no code."*
 
-**For a nervous room, lead with the five boxes** (all clicks and plain English):
+**Part 1 — the control sheet (five boxes, all clicks and plain English):**
 1. **Source ① — drop `inputs/Payments.xlsx`.**  2. **Source ② — drop `inputs/CategoryLookup.xlsx`.** *(csv beside each.)*
 3. **Join** — wire both in, pick `supplier` on each side, choose **Left join** — *"keep every payment; never
    drop one just because its category is missing."*
 4. **Add the `branch` group** — drop a **Prepare → Formula**, in plain English: *"if the category is empty,
    call it 'Unmatched (no category)', otherwise the company code, then Provider if the category is
    Claims/Refund/Travel else NonProvider, then Img2 if account_id is even else Img3."* Designer fills it in.
-5. **Total each group** — **Aggregate** → group by `branch` → sum `amount_paid` → `branch_total`.
-6. **Output** → `cs_control_sheet_designer` → **Run.** (A **formatted** control sheet lands in `uc2/output/` too.)
+5. **Total each group** — **Aggregate** → group by `branch` → sum `amount_paid` → `branch_total` →
+   **Output** `cs_control_sheet_designer`. (A **formatted** control sheet lands in `uc2/output/` too.)
 
-*The shortcut — **one ✨ prompt** builds the same flow:*
+**Part 2 — build the tie-back on the SAME canvas** (so the proof comes *out of your flow*, not a table that
+appears from nowhere — this is the beat that wins the room, and now it's connected):
+6. **Grand total of the groups** — drop a second **Aggregate** reading the step-5 group totals, **no group
+   key**, sum `branch_total` → `groups_total` (one number).
+7. **Grand total of every payment** — drop an **Aggregate** reading the **Join** output (step 3), **no group
+   key**, sum `amount_paid` → `all_total` (one number).
+8. **Compare** — **Join** those two single rows, then **Prepare → Formula**: *"variance = groups_total minus
+   all_total"* → **Output** `cs_tieback_designer`. **Variance = 0 → the parts tie to the whole, proven by the
+   flow you built.**
+
+*The shortcut — **one ✨ prompt** builds Part 1:*
 > *Join Payments to CategoryLookup on supplier, keeping every payment (left join). Add a branch column: if
 > there's no category call it "Unmatched (no category)", otherwise the company code, then "Provider" when
 > the category is Claims, Refund or Travel and "NonProvider" otherwise, then "Img2" when account_id is even
 > and "Img3" otherwise. Group by branch and total amount_paid. Save it as cs_control_sheet_designer.*
 
-### The proof you can't do today — population reconciliation (the beat that wins the room)
-**Open [`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon) as a grid — a simple table, not code.** It doesn't just flash "0.00"; it proves the
-total is the **whole population**:
-- **Every payment accounted for:** `400 in = 392 matched + 8 unmatched` — **0 dropped**.
-- **No double-counting:** rows after the join = 400; **0 duplicate suppliers** — **0 fan-out**.
-- **Groups sum to all payments:** Σ groups = Σ all = **−322,322.44**, **variance 0.00** — including Unmatched.
-- The run **stops itself** if the control ever breaks — so it can't silently go wrong.
+Then add Part 2's three boxes by hand (or tell ✨: *"also output the total of all payments, the total of the
+group totals, and the difference between them"*).
 
-*"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total —
-is exactly what this reconciles, in your spreadsheet you can't. Nothing hides behind a green 0.00."*
+### The proof you can't do today — parts = whole, from the flow you built (the beat that wins the room)
+**Everything here comes out of the canvas you just built — no separate table appears from nowhere:**
+- **Nothing dropped or duplicated:** on the **Join** node, the row count reads **400 in → 400 out** (the LEFT
+  join keeps every payment; no supplier fans out). Point at it on the canvas.
+- **Unmatched is visible:** the **8** no-category payments sit in their own **Unmatched (no category)** group in
+  `cs_control_sheet_designer` — not dropped, not hidden.
+- **Parts tie to the whole:** the **tie-back node** `cs_tieback_designer` (Part 2, steps 6–8) shows
+  **Σ groups = Σ all payments = −322,322.44, variance 0.00.** The proof is a box in *your* flow.
+
+*"The one thing a control exists to catch — a missing or duplicated supplier quietly wrecking the total — is
+exactly what this flow proves, live, in front of you. Nothing hides behind a green 0.00, and nothing appears
+from nowhere."*
+
+> **Backstage only (never opened):** a coded check, `cs_population_recon`, computes this exact tie-back
+> independently as *our* QA — the same numbers, proven a second way. Mention it to a skeptic; there's nothing
+> to show on screen.
 
 ### What you can't do today (same three, briefly)
 - **Governance:** trace any group total → the join → the actual payment rows (lineage). Click a number, see
@@ -212,10 +232,9 @@ is exactly what this reconciles, in your spreadsheet you can't. Nothing hides be
 ### Assets — small & legible (~400 payments → 8 groups incl. Unmatched)
 Folder [`recon_landing/uc2/`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/volumes/lr_dev_aws_us_catalog/designer_recon_demo/recon_landing) — **xlsx + csv**: drag `inputs/Payments.xlsx` **and**
 `inputs/CategoryLookup.xlsx`; **formatted output** in `output/`.
-Tables (open as grids): [`cs_payments`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_payments) ·
-[`cs_category_lookup`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_category_lookup) ·
-[`cs_control_sheet`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_control_sheet) (result) ·
-[`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon) (the tie-back).
+Inputs (open as grids): [`cs_payments`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_payments) · [`cs_category_lookup`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_category_lookup).
+**Your flow builds** `cs_control_sheet_designer` (group totals + Unmatched) and `cs_tieback_designer` (variance 0) — its own outputs, live.
+*Backstage twins (fallback / our QA, not shown live):* [`cs_control_sheet`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_control_sheet) · [`cs_population_recon`](https://fevm-lr-dev-aws-us.cloud.databricks.com/explore/data/lr_dev_aws_us_catalog/designer_recon_demo/cs_population_recon).
 
 ---
 
