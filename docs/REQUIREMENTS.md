@@ -19,9 +19,9 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 ---
 
 ## UC1 — Cash-flow reconciliation
-- **U1.1** Read the header cells (**SAP / Accurate / Bank / Control**) from each account's monthly
-  bank-rec workbook, across the folder of accounts.
-- **U1.2** Append the two new period columns (**Current + Control**) onto the rolling file —
+- **U1.1** Read each account's **8 reconciliation lines** (opening/closing **O/S items** and **balances per
+  SAP and per Bank**) from its bank-rec workbook's `Header` sheet, across the folder of accounts.
+- **U1.2** Append the new period's value + control as a **`Period NN` pair** onto the (long) rolling file —
   **without the positional hack** Alteryx forced (no variable for the moving column).
 - **U1.3** **Missing-workbook fallback:** pull **2 cells** from separate SAP + Bank folders instead of 4.
 - **U1.4** **Each account reconciles** (Control nets to **zero**); **exceptions flagged**.
@@ -33,10 +33,10 @@ Legend for review passes: **✅ built & proven** · **🟡 answerable live but n
 **UC1 score — 2026-09-15: ✅ 100% (every line shown/proven on dev):**
 | Req | ✅ where it's answered |
 |---|---|
-| U1.1 read the header cells | Auto Loader ingest → `cf_period_extract` (+ `source_file` provenance) |
-| U1.2 append without the positional hack | Join + Select add `Jul_Current`/`Jul_Control` **by name** |
+| U1.1 read the 8 reconciliation lines (Header sheet) | Auto Loader ingest → `cf_period_extract` (long; + `source_file` provenance) |
+| U1.2 append without the positional hack | Join on Account No.+Category; Select adds the **`Period NN` pair by name** |
 | U1.3 missing-workbook fallback | ACC-006 → 2-cell fallback (visible in `source_file`) |
-| U1.4 nets to zero + exceptions flagged | `Jul_Status` Reconciled/Exception; 5/6 reconciled, ACC-003 in red |
+| U1.4 nets to zero + exceptions flagged | `Status` on the Closing Balance per Bank line; **5/6 reconciled, account `0010003` the exception** |
 | U1.5 roll across the FY | rolling file carries Apr–Jul; `period` widget rolls on; month-12 → new FY file |
 | U1.6 formatted Excel | styled `.xlsx` + `.csv` written to `output/` |
 | C1 no-code | **Select** (rename) + **Prepare/Formula** (derive) — UI operators, no SQL |
@@ -81,8 +81,8 @@ Lakeflow Jobs + Auto Loader + Unity Catalog audit.)
 - **U3a.2** **Copy** the selected files to a destination folder (**no data change**).
 - **U3a.3** Runs **automatically** on schedule / on arrival — no manual macro run, no desktop dependency.
 
-### 3b — Avantia BDX (fixed-width + contra)
-- **U3b.1** **Parse ~30 daily fixed-width files by column position** (not text-to-columns).
+### 3b — Payment submissions (fixed-width + contra)
+- **U3b.1** **Parse fixed-width submission files by column position** (not text-to-columns), from two sources.
 - **U3b.2** Tag each row with its **source file**.
 - **U3b.3** **Per-file contra check:** the detail rows must **sum to that file's contra row**.
 - **U3b.4** **Consolidate** all files into one output (CSV is fine here).
@@ -92,16 +92,16 @@ Lakeflow Jobs + Auto Loader + Unity Catalog audit.)
 **UC3 score — 2026-09-15: ✅ 100% + hardened (proven on dev):**
 | Req | ✅ where it's answered |
 |---|---|
-| U3a.1 correct version by name (2 folders) | `af_version_audit` picks highest version per folder+code |
+| U3a.1 correct version by name (2 folders) | `af_version_audit` picks the **latest date-time stamp in the name** per folder+code |
 | U3a.2 copy to destination, no change | 5 chosen files copied; data untouched |
 | U3a.3 scheduled / on-arrival | Job schedule + Auto Loader |
 | U3b.1 parse fixed-width by position | substring-by-position parse |
 | U3b.2 source_file tag | `source_file` on every row |
-| U3b.3 per-file contra check | `fw_contra_log` MATCH/MISMATCH |
+| U3b.3 per-file contra check | `fw_contra_log`: detail rows (Trans Code 99) sum to the Trans Code 17 contra row |
 | U3b.4 consolidate | `fw_bdx_consolidated` + CSV |
 | U3b.5 run log / summary | `fw_contra_log` + `run_summary_*.txt` |
 | U3b.6 scheduled + unattended + audited | Jobs + run history + audit tables |
-| *file reconciliation* | 3a: 9 seen = 5 chosen + 4 superseded + 0 unrecognized · 3b: every file statused, asserted |
+| *file reconciliation* | 3a: **6 seen = 4 chosen + 2 superseded** + 0 unrecognized · 3b: **6 files = 3 MATCH + 1 MISMATCH + 1 NO CONTRA + 1 PARSE ISSUE**, asserted |
 | *value-level integrity* | PARSE ISSUE (unparsed amount) / MULTI CONTRA / NO CONTRA / EMPTY — nothing silently dropped or mis-summed |
 | *honest roadmap (not claimed)* | version-correctness beyond highest-name; idempotent single-file re-run + failure alerting; big-volume patterns |
 
@@ -139,6 +139,15 @@ Two further reworks after the persona pass, both to protect a hostile no-code ro
 - **Narrative arc** (session spine): **① your process today, on Databricks → ② smoother (Auto Loader) → ③
   what you can't do today (governance / sharing / versioning + previous runs)**. UC1 walks the full arc;
   governance is surfaced as **grids + a Genie question**, never a notebook. All U/C lines still ✅.
+
+## Data reshape — 2026-09-17
+The client (via Ethan/Sarah) sent **dummy** data after the reschedule. The synthetic data shapes now mirror it
+(**schema only — no real names, accounts, sort codes or PII carried over**), flow unchanged:
+- **UC1:** rolling file is **long** (account × 8 reconciliation lines; a `Period NN` + Control pair per period);
+  workbooks carry a `Header` sheet; fallback = a SAP-balances xlsx + a bank-statement CSV. 6 accounts, **5/6 reconciled**, account `0010003` the exception.
+- **UC3a:** real filename pattern (`RPT02_Claims_Suspense_TEXT_<date-time>.txt`), version = the stamp in the name. **6 seen = 4 chosen + 2 superseded.**
+- **UC3b:** BACS-style fixed-width from **two sources**, contra by **Trans Code 17 = Σ Trans Code 99**, consolidated tagged by source. **6 files = 3 MATCH + 1 MISMATCH + 1 NO CONTRA + 1 PARSE ISSUE.**
+- **UC2:** unchanged — no data provided (that use case's owner was on leave).
 
 *How to use this:* each review round, walk the current demo against every line above from each of the
 review personas, mark ✅/🟡/⚠️, and fold the fixes back into the build + runbook. Keep this file the

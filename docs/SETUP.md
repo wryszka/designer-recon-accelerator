@@ -55,6 +55,12 @@ databricks bundle run automation_bdx_parser     -t dev -p DEV
 lands (drop a file, re-run, row count 3 → 6). Back-pocket only, for a technical questioner — it's the
 opposite of the "you still drop your file" reassurance a nervous room needs.
 
+## Gotcha: real column headers need Delta column mapping
+UC1 tables use real headers with spaces/dots (`Account No.`, `Period 01 Control`). Delta rejects those unless
+column mapping is on. Set it **as a table property on the write** — `.option("delta.columnMapping.mode","name")` —
+**not** via `spark.conf.set(...defaults.columnMapping.mode)`, which serverless blocks. Old non-mapped tables must
+be `DROP`ped first (the generator does this) so they recreate with mapping.
+
 ## Excel export gotcha (serverless)
 `to_excel` / openpyxl **cannot** write directly to a `/Volumes` path (FUSE = `Errno 95, Operation not
 supported`, no random-access write). Write to a local `tempfile.mkdtemp()` first, then `shutil.copy` to the
