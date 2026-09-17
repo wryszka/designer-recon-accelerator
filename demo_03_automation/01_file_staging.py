@@ -2,11 +2,10 @@
 # MAGIC %md
 # MAGIC # UC3a · File staging — pick the right version by name, stage it, log it
 # MAGIC
-# MAGIC The ACS Station-Journal job: files land in **two folders** on a schedule; at the start of the
-# MAGIC month you find, **for each report code, the correct version *by file name*** (not the
-# MAGIC latest-arrived — a v02 that arrived on the 28th is still preferred over a v01 that arrived on
-# MAGIC the 29th), and **copy** the chosen files to a destination folder. No data is changed — it's
-# MAGIC pure file movement.
+# MAGIC The report-staging job: report files land in **two folders** on a schedule; at the start of the
+# MAGIC month you find, **for each report code, the correct version *by the date-time stamp in the file
+# MAGIC name*** (not the latest-*arrived* — a file stamped the 2nd beats one arriving later stamped the 1st),
+# MAGIC and **copy** the chosen files to a destination folder. No data is changed — it's pure file movement.
 # MAGIC
 # MAGIC Honest framing: this isn't a **Designer** transform — it's file/OS logic, so it belongs in a
 # MAGIC **Lakeflow Job** with **Autoloader**. The platform gives the schedule, the autonomous run
@@ -39,24 +38,25 @@ checkpoint = f"{vroot}/_checkpoint"
 
 # COMMAND ----------
 
-import numpy as np
-rng = np.random.default_rng(11)
-
 # reset for idempotent re-runs
 dbutils.fs.rm(vroot, True)
 for d in [f"{sources}/folder_a", f"{sources}/folder_b", dest]:
     dbutils.fs.mkdirs(d)
 
-layout = {"folder_a": ["0230", "0270", "0310"], "folder_b": ["0450", "0520"]}
+# report files: identity is entirely in the NAME (report code + descriptor + date-time stamp); content is
+# opaque — we only move the file. Some report codes arrive twice; the LATER stamp is the correct version.
+layout = {"folder_a": [("RPT02", "Claims_Suspense"), ("RPT03", "Claims_Ignored")],
+          "folder_b": [("RPT61", "Fleet_Motor_Claims"), ("RPT77", "Household_Suspense")]}
+stamps = {"RPT02": ["2026-09-01-07-30-38", "2026-09-02-07-30-22"],   # two versions -> later chosen
+          "RPT03": ["2026-09-02-07-32-36"],
+          "RPT61": ["2026-08-31-07-42-52", "2026-09-01-07-40-10"],   # two versions -> later chosen
+          "RPT77": ["2026-09-02-07-45-01"]}
 landed = []
 for folder, codes in layout.items():
-    for code in codes:
-        n_versions = int(rng.integers(1, 4))                 # 1–3 versions per code
-        for v in range(1, n_versions + 1):
-            date = f"202606{10 + v:02d}"                     # later version = later date in name
-            name = f"ACS_{code}_v{v:02d}_{date}.csv"
-            dbutils.fs.put(f"{sources}/{folder}/{name}",
-                           f"station,journal,amount\nST{code},{date},{1000*v}\n", True)
+    for code, desc in codes:
+        for ts in stamps[code]:
+            name = f"{code}_{desc}_TEXT_{ts}.txt"
+            dbutils.fs.put(f"{sources}/{folder}/{name}", "dummy\n", True)   # opaque content — pure file movement
             landed.append(f"{folder}/{name}")
 print(f"landed {len(landed)} files across two folders:")
 for f in sorted(landed): print("  ", f)
@@ -90,15 +90,15 @@ spark.sql(f"""
 CREATE OR REPLACE TABLE {fqn}.af_version_audit AS
 WITH parsed AS (
   SELECT path,
-         element_at(split(path, '/'), -1)                          AS file_name,
-         element_at(split(path, '/'), -2)                          AS folder,
-         regexp_extract(path, 'ACS_(\\\\d+)_', 1)                    AS report_code,
-         CAST(regexp_extract(path, '_v(\\\\d+)_', 1) AS INT)         AS version
+         element_at(split(path, '/'), -1)                                       AS file_name,
+         element_at(split(path, '/'), -2)                                       AS folder,
+         regexp_extract(element_at(split(path,'/'),-1), '^(RPT\\\\d+)_', 1)        AS report_code,
+         regexp_extract(element_at(split(path,'/'),-1), '_TEXT_(.+)\\\\.txt', 1)   AS name_stamp
   FROM {fqn}.af_files_bronze)
-SELECT folder, report_code, version, file_name, path,
-       CASE WHEN report_code = '' OR version IS NULL THEN 'unrecognized'
-            WHEN version = max(version) OVER (PARTITION BY folder, report_code) THEN 'chosen'
-            ELSE 'superseded' END                                  AS disposition
+SELECT folder, report_code, name_stamp AS version, file_name, path,
+       CASE WHEN report_code = '' OR name_stamp = '' THEN 'unrecognized'
+            WHEN name_stamp = max(name_stamp) OVER (PARTITION BY folder, report_code) THEN 'chosen'
+            ELSE 'superseded' END                                               AS disposition
 FROM parsed
 """)
 spark.sql(f"COMMENT ON TABLE {fqn}.af_version_audit IS 'UC3a every file seen + disposition (chosen/superseded/unrecognized). Synthetic.'")
